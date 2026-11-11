@@ -1,0 +1,106 @@
+/* NORTRIUM — estilos visuais (Ajustes > Estilo visual). Vêm depois do app.css e só mudam forma, fonte e navegação.
+   html[data-estilo] = editorial | facetado | suave. As cores continuam vindo do tema (escuro/claro) e de cada módulo. */
+@font-face{font-family:"NT Sans";font-weight:400;font-display:swap;src:url(../fonts/inter-Regular.woff) format("woff")}
+@font-face{font-family:"NT Sans";font-weight:500;font-display:swap;src:url(../fonts/inter-Medium.woff) format("woff")}
+@font-face{font-family:"NT Sans";font-weight:600;font-display:swap;src:url(../fonts/inter-SemiBold.woff) format("woff")}
+@font-face{font-family:"NT Sans";font-weight:700;font-display:swap;src:url(../fonts/inter-Bold.woff) format("woff")}
+@font-face{font-family:"NT Sans";font-weight:800;font-display:swap;src:url(../fonts/inter-ExtraBold.woff) format("woff")}
+@font-face{font-family:"NT Mono";font-weight:400 500;font-display:swap;src:url(../fonts/plexmono-Regular.woff) format("woff")}
+@font-face{font-family:"NT Mono";font-weight:600 800;font-display:swap;src:url(../fonts/plexmono-Bold.woff) format("woff")}
+html{--fs:"NT Sans",system-ui,Roboto,"Segoe UI",sans-serif;--fm:"NT Mono",ui-monospace,Menlo,Consolas,monospace;--cut:14px}
+body{font-family:var(--fs)}
+button,input,select,textarea{font-family:inherit}
+
+/* ---------- peças novas (valem para todos os estilos) ---------- */
+.tl{margin:2px 0 16px}
+.tl .trk{position:relative;height:40px;border-bottom:1px solid var(--ln)}
+.tl .trk i{position:absolute;top:12px;height:28px;min-width:6px;background:var(--mc)}
+.tl .trk i.f{background:var(--ln)}
+.tl .now{position:absolute;top:8px;bottom:-1px;width:2px;background:var(--g)}
+.tl .nl{position:absolute;top:-3px;font-size:10.5px;font-weight:700;color:var(--g);font-variant-numeric:tabular-nums}
+.tl .hs{display:flex;justify-content:space-between;margin-top:6px;font-size:10.5px;color:var(--mu);font-variant-numeric:tabular-nums}
+.estilos{display:grid;gap:8px;margin-bottom:6px}
+.estilos button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:12px 14px;border:1px solid var(--ln);background:var(--sf2);color:var(--ink);border-radius:var(--r)}
+.estilos button small{color:var(--mu);font-size:12.5px}
+.estilos button.on{border-color:var(--cor);outline:1px solid var(--cor);outline-offset:-2px}
+.estilos button.on b::after{content:"  ✓";color:var(--cor)}
+.foco .fh{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mu)}
+.foco h2{margin:4px 0 2px;font-size:30px;line-height:1.1;letter-spacing:-.02em}
+.foco .ls{margin:14px 0 6px}
+.foco .ls>div{display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--ln2);color:var(--mu);font-variant-numeric:tabular-nums}
+.foco .ls>div.cur{color:var(--cor);font-weight:600}
+.foco .cl{margin-top:16px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mu)}
+.foco .st{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+.foco .st .v{font-size:54px;font-weight:600;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
+.foco .st .v small{font-size:16px;color:var(--mu);letter-spacing:0;font-weight:400}
+.foco .st button{width:60px;height:60px;padding:0;border:1px solid var(--ln);background:var(--sf2);color:var(--ink);font-size:28px;line-height:1;border-radius:var(--r)}
+.foco .go{position:sticky;bottom:0;z-index:2;margin:18px 0 10px;padding:8px 0;background:var(--sf)}
+.foco .go .btn{padding:18px;font-size:16px}
+.foco .exb .btn{padding:9px 14px}
+
+/* ============ EDITORIAL: linhas finas, números em fonte técnica ============ */
+html[data-estilo="editorial"]{--r:0px;--r2:0px}
+[data-estilo="editorial"] .big,[data-estilo="editorial"] .kpi b,[data-estilo="editorial"] .cron,[data-estilo="editorial"] .sum b,[data-estilo="editorial"] .n,
+[data-estilo="editorial"] .ativ .hr,[data-estilo="editorial"] .ring b,[data-estilo="editorial"] .foco .st .v,[data-estilo="editorial"] .tl .hs,[data-estilo="editorial"] .tl .nl{font-family:var(--fm);font-weight:500;letter-spacing:-.03em}
+[data-estilo="editorial"] .big{font-size:32px;font-weight:500}
+[data-estilo="editorial"] .hi .nome{font-size:30px;font-weight:600;letter-spacing:-.02em}
+[data-estilo="editorial"] .card,[data-estilo="editorial"] .hero,[data-estilo="editorial"] .sum div,[data-estilo="editorial"] .banner{background:transparent;border:0;border-top:1px solid var(--ln);padding:14px 0;margin-bottom:4px}
+[data-estilo="editorial"] .sum div{padding:10px 8px 10px 0}
+[data-estilo="editorial"] .card>h3{font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);font-family:var(--fm)}
+[data-estilo="editorial"] .card>h3 .ci{display:none}
+[data-estilo="editorial"] .card>h3::before{content:"";width:3px;height:12px;background:var(--mc);flex:none;margin-right:-2px}
+[data-estilo="editorial"] .card.mod{border-left:0}
+[data-estilo="editorial"] .prog{background:none;border:0;border-top:1px solid var(--ln);border-bottom:1px solid var(--ln);padding:14px 0}
+[data-estilo="editorial"] .prog .ring{display:none}
+[data-estilo="editorial"] .prog .li i{background:none;color:var(--cor);width:auto;font-size:13px}
+[data-estilo="editorial"] .kpis{gap:0;border-bottom:1px solid var(--ln)}
+[data-estilo="editorial"] .kpi{background:none;border:0;border-top:1px solid var(--ln);padding:12px 10px 12px 0}
+[data-estilo="editorial"] .kpi:nth-child(even){border-left:1px solid var(--ln);padding-left:12px}
+[data-estilo="editorial"] .kpi small:first-child{font-family:var(--fm);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+[data-estilo="editorial"] .kpi .bar,[data-estilo="editorial"] .bar{height:3px;border-radius:0}
+[data-estilo="editorial"] .kpi .bar i,[data-estilo="editorial"] .crow .bar i{border-radius:0}
+[data-estilo="editorial"] .ativ{background:none;border:0;border-top:1px solid var(--ln);border-left:3px solid var(--mc);padding:12px 12px;margin:0}
+[data-estilo="editorial"] .ativ .ic{display:none}
+[data-estilo="editorial"] .sech b,[data-estilo="editorial"] .dia{font-family:var(--fm);font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--mu)}
+[data-estilo="editorial"] .top .ti{background:none}
+[data-estilo="editorial"] .top h1{font-weight:600}
+[data-estilo="editorial"] .seg{gap:20px;border-bottom:1px solid var(--ln);margin-bottom:14px}
+[data-estilo="editorial"] .seg button{border:0;border-bottom:2px solid transparent;background:none;padding:10px 2px;color:var(--mu)}
+[data-estilo="editorial"] .seg button.on{background:none;color:var(--cor);border-bottom-color:var(--cor)}
+[data-estilo="editorial"] .btn,[data-estilo="editorial"] #fab{clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%)}
+[data-estilo="editorial"] nav.bot button.on::before{height:3px;clip-path:polygon(0 0,100% 0,calc(100% - 3px) 100%,3px 100%)}
+[data-estilo="editorial"] .tl .trk i{border-radius:0}
+
+/* ============ FACETADO: escuro e geométrico, canto cortado como o logo ============ */
+html[data-estilo="facetado"]{--r:0px;--r2:0px}
+[data-estilo="facetado"] .card,[data-estilo="facetado"] .kpi,[data-estilo="facetado"] .hero,[data-estilo="facetado"] .prog,[data-estilo="facetado"] .sum div,[data-estilo="facetado"] .run,[data-estilo="facetado"] .banner,[data-estilo="facetado"] .ativ{border:0;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,0 100%)}
+[data-estilo="facetado"] .kpi,[data-estilo="facetado"] .ativ{border-left:3px solid var(--mc)}
+[data-estilo="facetado"] .btn,[data-estilo="facetado"] #fab{clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%)}
+[data-estilo="facetado"] .big,[data-estilo="facetado"] .kpi b,[data-estilo="facetado"] .cron,[data-estilo="facetado"] .hi .nome{font-weight:700;letter-spacing:-.03em}
+[data-estilo="facetado"] nav.bot button.on::before{height:3px;clip-path:polygon(0 0,100% 0,calc(100% - 3px) 100%,3px 100%)}
+[data-estilo="facetado"] .tl .trk i{border-radius:0}
+
+/* ============ SUAVE: cantos arredondados, cards claros, barra flutuante ============ */
+html[data-estilo="suave"]{--r:20px;--r2:12px;--nav:78px}
+html[data-estilo="suave"]:not([data-tema="escuro"]){--bg:#F4F1EA;--sf:#FFFFFF;--sf2:#F4F1EA;--ln:#E2DED3;--ln2:#ECE8DD;--mu:#6B6A63}
+[data-estilo="suave"] svg *{stroke-linecap:round;stroke-linejoin:round}
+[data-estilo="suave"] .ring circle{stroke-linecap:round}
+[data-estilo="suave"] .card,[data-estilo="suave"] .kpi,[data-estilo="suave"] .hero,[data-estilo="suave"] .prog,[data-estilo="suave"] .sum div,[data-estilo="suave"] .ativ,[data-estilo="suave"] .banner{border:0;border-radius:22px}
+[data-estilo="suave"] .kpi,[data-estilo="suave"] .ativ{border-left:0}
+[data-estilo="suave"] .card.mod{border-left:0}
+[data-estilo="suave"] .hi .nome,[data-estilo="suave"] .top h1,[data-estilo="suave"] .big,[data-estilo="suave"] .kpi b,[data-estilo="suave"] .cron{font-weight:800;letter-spacing:-.03em}
+[data-estilo="suave"] .hi .nome{font-size:32px}
+[data-estilo="suave"] .btn,[data-estilo="suave"] .seg button,[data-estilo="suave"] .tg,[data-estilo="suave"] .ib,[data-estilo="suave"] .mnav button{border-radius:22px}
+[data-estilo="suave"] .tg button,[data-estilo="suave"] .tg{border-radius:22px}
+[data-estilo="suave"] #fab{border-radius:28px;bottom:calc(var(--nav) + env(safe-area-inset-bottom,0px) + 14px)}
+[data-estilo="suave"] .ck{border-radius:8px}
+[data-estilo="suave"] .bar,[data-estilo="suave"] .bar i,[data-estilo="suave"] .tr,[data-estilo="suave"] .tl .trk i{border-radius:6px}
+[data-estilo="suave"] .cal .d,[data-estilo="suave"] .pill{border-radius:12px}
+[data-estilo="suave"] .sheet{border-radius:24px 24px 0 0}
+[data-estilo="suave"] .sheet.full{border-radius:0}
+[data-estilo="suave"] nav.bot{left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);padding:6px 8px;border:0;border-radius:32px;background:#1B1A17}
+[data-estilo="suave"][data-tema="escuro"] nav.bot,html[data-estilo="suave"][data-tema="escuro"] nav.bot{background:#1B2420}
+[data-estilo="suave"] nav.bot button{color:#C9C6BC;padding:10px 0;border-radius:24px;flex:0 0 20%}
+[data-estilo="suave"] nav.bot button.on{background:#F4F1EA;color:#1B1A17;font-weight:700}
+[data-estilo="suave"] nav.bot button.on::before{display:none}
+[data-estilo="suave"] .toast{bottom:calc(var(--nav) + env(safe-area-inset-bottom,0px) + 86px)}

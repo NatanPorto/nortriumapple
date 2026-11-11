@@ -54,7 +54,7 @@ const Agenda = (() => {
     DB.agenda.eventos.forEach(ev => {
       if (!ocorre(ev, d)) return;
       const habito = ev.tipo === 'habito', seq = habito && d <= hj ? sequencia(ev, d) : 0;
-      out.push({ k: 'evento', cor: 'var(--c-agenda)', hora: ev.hora || '', titulo: ev.titulo, ref: ev.id,
+      out.push({ k: 'evento', cor: 'var(--c-agenda)', hora: ev.hora || '', horaFim: ev.horaFim || '', titulo: ev.titulo, ref: ev.id,
         avisos: ev.avisos, rep: !!ev.repete && ev.repete !== 'nao', habito,
         sub: [ev.hora && (ev.hora + (ev.horaFim ? '\u2013' + ev.horaFim : '')), ev.local, seq > 0 && `Sequência: ${seq} ${seq > 1 ? 'dias' : 'dia'}`].filter(Boolean).join(' · '),
         feito: !!(ev.feitos && ev.feitos[d]) });
@@ -62,7 +62,7 @@ const Agenda = (() => {
     (DB.estudo.aulas || []).forEach(a => {
       if (!ocorre(a, d)) return;
       const m = DB.estudo.materias.find(x => x.id === a.materiaId);
-      out.push({ k: 'aula', cor: 'var(--c-estudo)', hora: a.hora || '', titulo: 'Aula: ' + (m ? m.nome : 'sem matéria'), ref: a.id, avisos: a.avisos, rep: true,
+      out.push({ k: 'aula', cor: 'var(--c-estudo)', hora: a.hora || '', horaFim: a.horaFim || '', titulo: 'Aula: ' + (m ? m.nome : 'sem matéria'), ref: a.id, avisos: a.avisos, rep: true,
         sub: [a.hora && (a.hora + (a.horaFim ? '\u2013' + a.horaFim : '')), a.local].filter(Boolean).join(' · '),
         feito: !!(a.feitos && a.feitos[d]) });
     });
@@ -89,7 +89,8 @@ const Agenda = (() => {
     DB.trabalho.tarefas.forEach(t => {
       if (t.prazo === d) out.push({ k: 'tarefa', cor: 'var(--c-trab)', hora: '', titulo: 'Prazo: ' + t.titulo, sub: '', feito: !!t.feito, ref: t.id });
     });
-    return out.sort((a, b) => (a.hora || '99:99').localeCompare(b.hora || '99:99'));
+    const aba = { evento: 'agenda', aula: 'estudo', conta: 'fin', treino: 'treino', prova: 'estudo', tarefa: 'trab' };
+    return out.filter(i => abaOn(aba[i.k])).sort((a, b) => (a.hora || '99:99').localeCompare(b.hora || '99:99'));
   }
 
   function render(el) {

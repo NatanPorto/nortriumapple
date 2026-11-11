@@ -8,6 +8,7 @@ const Fin = (() => {
   const mesNome = m => { const [y, mo] = m.split('-'); return MESES[+mo - 1] + ' ' + y; };
   const addMes = (m, n) => addMeses(m + '-01', n).slice(0, 7);
   const contaDe = id => DB.fin.contas.find(c => c.id === id) || DB.fin.contas[0];
+  const PAG = { credito: 'Crédito', debito: 'Débito', pix: 'Pix', dinheiro: 'Dinheiro' };
   const fmtV = t => `${t.tipo === 'entrada' ? '+' : '−'} ${dinheiro(t.valor)}`;
 
   /* ---------- cálculos ---------- */
@@ -36,8 +37,9 @@ const Fin = (() => {
 
   /* ---------- tela ---------- */
   const EXT = {};   // telas extras (js/fin-extras.js): cartões, previsão, metas, dívidas
-  const SEGS = [['lanc', 'Lançamentos'], ['pend', 'A pagar/receber'], ['contas', 'Contas'], ['cart', 'Cartões'], ['prev', 'Previsão'], ['orc', 'Orçamentos'], ['metas', 'Metas'], ['div', 'Dívidas'], ['resumo', 'Resumo']];
+  const SEGS = [['lanc', 'Lançamentos'], ['pend', 'A pagar/receber'], ['contas', 'Contas'], ['cart', 'Cartões'], ['prev', 'Previsão'], ['orc', 'Orçamentos'], ['metas', 'Metas'], ['inv', 'Investimentos'], ['sim', 'Simulador'], ['div', 'Dívidas'], ['resumo', 'Resumo']];
   function render(el) {
+    if (EXT.sincPlanos && EXT.sincPlanos()) Store.salvar();      // aportes planejados viram lançamentos pendentes
     if (!SEGS.some(s => s[0] === S.seg)) S.seg = 'lanc';
     el.innerHTML = segHtml(SEGS, S.seg) + '<div id="fin-c"></div>';
     const bar = $('.seg', el), on = $('.seg .on', el);
@@ -49,9 +51,30 @@ const Fin = (() => {
   const mesNavHtml = () => `<div class="mnav"><button data-m="-1" aria-label="Mês anterior">‹</button><b>${mesNome(S.mes)}</b><button data-m="1" aria-label="Próximo mês">›</button></div>`;
   const bindMes = el => $$('.mnav button', el).forEach(b => b.onclick = () => { S.mes = addMes(S.mes, +b.dataset.m); refresh(); });
 
+  /* Compras no cartão viram UMA saída por fatura (cartão + vencimento), no mês do vencimento.
+     Só muda a exibição: os lançamentos continuam separados e os totais não mudam. */
+  function agruparFaturas(lista) {
+    const out = [], por = {};
+    lista.forEach(t => {
+      if (t.cartaoId && t.tipo === 'saida' && EXT.cartaoPor && EXT.cartaoPor(t.cartaoId)) {
+        const k = t.cartaoId + '|' + t.data;
+        if (!por[k]) { por[k] = { fatura: true, id: 'f:' + k, chave: k, cartaoId: t.cartaoId, data: t.data, tipo: 'saida', categoria: 'Fatura do cartão', itens: [], valor: 0, status: 'pago' }; out.push(por[k]); }
+        const f = por[k]; f.itens.push(t); f.valor = r2(f.valor + t.valor); if (t.status === 'pendente') f.status = 'pendente';
+      } else out.push(t);
+    });
+    return out;
+  }
+  function linhaFatura(f) {
+    const venc = f.status === 'pendente' && f.data < hoje();
+    const sub = [`💳 ${f.itens.length} compra${f.itens.length > 1 ? 's' : ''}`, f.status === 'pendente' ? `<span class="${venc ? 'neg' : ''}">${venc ? 'vencida' : 'a pagar'}</span>` : 'paga'].join(' · ');
+    return `<div class="row" data-fat="${esc(f.chave)}">${f.status === 'pendente' ? `<button class="ck" data-fq="${esc(f.chave)}" aria-label="Marcar fatura como paga"></button>` : ''}
+      <div class="t"><b>Fatura ${esc(EXT.cartaoNome(f.cartaoId))}</b><small>${sub}</small></div><span class="n neg">− ${dinheiro(f.valor)}</span></div>`;
+  }
+  const linha = t => t.fatura ? linhaFatura(t) : linhaTx(t);
+
   function linhaTx(t) {
     const venc = t.status === 'pendente' && t.data < hoje();
-    const sub = [t.categoria, DB.fin.contas.length > 1 ? contaDe(t.contaId).nome : '', t.cartaoId && EXT.cartaoNome ? '💳 ' + EXT.cartaoNome(t.cartaoId) : '', t.parcelas ? `${t.parcela}/${t.parcelas}` : '',
+    const sub = [t.categoria, DB.fin.contas.length > 1 ? contaDe(t.contaId).nome : '', t.cartaoId && EXT.cartaoNome ? '💳 ' + EXT.cartaoNome(t.cartaoId) : (PAG[t.pagamento] || ''), t.parcelas ? `${t.parcela}/${t.parcelas}` : '',
       t.status === 'pendente' ? `<span class="${venc ? 'neg' : ''}">${venc ? 'vencido' : 'pendente'}</span>` : ''].filter(Boolean).join(' · ');
     return `<div class="row" data-id="${t.id}">${t.status === 'pendente' ? `<button class="ck" data-q="${t.id}" aria-label="Marcar como ${t.tipo === 'entrada' ? 'recebido' : 'pago'}"></button>` : ''}
       <div class="t"><b>${esc(t.descricao || t.categoria)}</b><small>${sub}</small></div>
@@ -60,11 +83,13 @@ const Fin = (() => {
   function ligarLinhas(el) {
     $$('.row[data-id]', el).forEach(r => r.onclick = e => { if (e.target.closest('[data-q]')) return; formTx(DB.fin.tx.find(t => t.id === r.dataset.id)); });
     $$('[data-q]', el).forEach(b => b.onclick = () => baixar(b.dataset.q));
+    $$('.row[data-fat]', el).forEach(r => r.onclick = e => { if (e.target.closest('[data-fq]')) return; const [c, d] = r.dataset.fat.split('|'); EXT.detalheFatura(c, d); });
+    $$('[data-fq]', el).forEach(b => b.onclick = () => { const [c, d] = b.dataset.fq.split('|'); EXT.pagarFatura(c, d); });
   }
   function baixar(id) {
     const t = DB.fin.tx.find(x => x.id === id); if (!t) return;
-    t.status = t.tipo === 'entrada' ? 'recebido' : 'pago'; commit();
-    toast(t.tipo === 'entrada' ? 'Marcado como recebido' : 'Marcado como pago', () => { t.status = 'pendente'; commit(); });
+    t.status = t.tipo === 'entrada' ? 'recebido' : 'pago'; if (EXT.statusMudou) EXT.statusMudou(t); commit();
+    toast(t.tipo === 'entrada' ? 'Marcado como recebido' : 'Marcado como pago', () => { t.status = 'pendente'; if (EXT.statusMudou) EXT.statusMudou(t); commit(); });
   }
 
 
@@ -103,7 +128,7 @@ const Fin = (() => {
     if (S.filtro === 'pend') lista = lista.filter(t => t.status === 'pendente');
     const q = S.busca.trim().toLowerCase();
     if (q) lista = lista.filter(t => (t.descricao + ' ' + t.categoria).toLowerCase().includes(q));
-    lista = [...lista].sort((a, b) => b.data.localeCompare(a.data));
+    lista = agruparFaturas(lista).sort((a, b) => b.data.localeCompare(a.data));
     const dias = {}; lista.forEach(t => (dias[t.data] = dias[t.data] || []).push(t));
     const ant = doMes(addMes(S.mes, -1)), vEnt = variacao(ent, total(ant, 'entrada')), vSai = variacao(sai, total(ant, 'saida'));
     const chip = (v, bomSobe) => v === null ? '' : `<small class="${(v >= 0) === bomSobe ? 'pos' : 'neg'}">${v >= 0 ? '↑ +' : '↓ −'}${Math.abs(v)}%</small>`;
@@ -112,7 +137,7 @@ const Fin = (() => {
       ${cardCategorias(mes)}
       <label class="f"><input id="busca" type="search" placeholder="Buscar descrição ou categoria" value="${esc(S.busca)}"></label>
       <div class="seg sm">${[['todos', 'Todos'], ['entrada', 'Entradas'], ['saida', 'Saídas'], ['pend', 'Pendentes']].map(([k, l]) => `<button data-f="${k}" class="${S.filtro === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-      ${lista.length ? Object.keys(dias).map(d => `<div class="dia">${fmtDiaCurto(d)}</div><div class="card" style="padding:2px 14px">${dias[d].map(linhaTx).join('')}</div>`).join('')
+      ${lista.length ? Object.keys(dias).map(d => `<div class="dia">${fmtDiaCurto(d)}</div><div class="card" style="padding:2px 14px">${dias[d].map(linha).join('')}</div>`).join('')
         : `<div class="empty">${mes.length ? 'Nada encontrado com esse filtro.' : 'Nenhum lançamento neste mês.<br>Toque em + para adicionar.'}</div>`}`;
     bindMes(el); ligarLinhas(el);
     $$('[data-per]', el).forEach(b => b.onclick = () => { S.per = b.dataset.per; refresh(); });
@@ -125,9 +150,9 @@ const Fin = (() => {
     const bloco = (titulo, l, cls) => {
       const venc = soma(l.filter(t => t.data < hj).map(t => t.valor));
       return `<div class="card"><h3>${titulo}<span class="n ${cls}">${dinheiro(soma(l.map(t => t.valor)))}</span></h3>${venc ? `<small class="neg">${dinheiro(venc)} vencido</small>` : ''}
-        ${l.length ? l.slice(0, 80).map(t => `<div class="row" data-id="${t.id}"><button class="ck" data-q="${t.id}" aria-label="Dar baixa"></button><div class="t"><b>${esc(t.descricao || t.categoria)}</b><small><span class="${t.data < hj ? 'neg' : ''}">${fmtData(t.data)} · ${quando(t.data)}</span> · ${esc(t.categoria)}</small></div><span class="n">${dinheiro(t.valor)}</span></div>`).join('') : '<div class="empty">Tudo em dia.</div>'}</div>`;
+        ${l.length ? l.slice(0, 80).map(t => t.fatura ? linhaFatura(t) : `<div class="row" data-id="${t.id}"><button class="ck" data-q="${t.id}" aria-label="Dar baixa"></button><div class="t"><b>${esc(t.descricao || t.categoria)}</b><small><span class="${t.data < hj ? 'neg' : ''}">${fmtData(t.data)} · ${quando(t.data)}</span> · ${esc(t.categoria)}</small></div><span class="n">${dinheiro(t.valor)}</span></div>`).join('') : '<div class="empty">Tudo em dia.</div>'}</div>`;
     };
-    el.innerHTML = bloco('A pagar', p.filter(t => t.tipo === 'saida'), 'neg') + bloco('A receber', p.filter(t => t.tipo === 'entrada'), 'pos');
+    el.innerHTML = bloco('A pagar', agruparFaturas(p.filter(t => t.tipo === 'saida')), 'neg') + bloco('A receber', p.filter(t => t.tipo === 'entrada'), 'pos');
     ligarLinhas(el);
   }
 
@@ -173,7 +198,7 @@ const Fin = (() => {
   }
   async function exportar(lista, nome) {
     const ord = [...lista].sort((a, b) => a.data.localeCompare(b.data));
-    const linhas = [['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor', 'Situação', 'Conta'], ...ord.map(t => [t.data.split('-').reverse().join('/'), t.tipo === 'entrada' ? 'Entrada' : 'Saída', t.categoria, t.descricao || '', String(t.valor).replace('.', ','), t.status, contaDe(t.contaId).nome])];
+    const linhas = [['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor', 'Situação', 'Conta', 'Pagamento'], ...ord.map(t => [t.data.split('-').reverse().join('/'), t.tipo === 'entrada' ? 'Entrada' : 'Saída', t.categoria, t.descricao || '', String(t.valor).replace('.', ','), t.status, contaDe(t.contaId).nome, PAG[t.pagamento] || (t.cartaoId ? 'Crédito' : '')])];
     const r = await salvarArquivo('Relatórios', nome, csv(linhas), 'text/csv');
     toast(r.ok ? `Salvo em ${r.caminho}` : 'Não foi possível exportar.');
   }
@@ -183,22 +208,57 @@ const Fin = (() => {
     const novo = !t;
     const ini = t || { tipo: 'saida', data: S.mes === hoje().slice(0, 7) ? hoje() : S.mes + '-01', status: 'pago', contaId: DB.fin.contas[0].id, categoria: '' };
     let tipo = ini.tipo;
+    const cartoes = (EXT.cartoesAtivos ? EXT.cartoesAtivos() : []).slice();
+    if (ini.cartaoId && EXT.cartaoPor && !cartoes.some(c => c.id === ini.cartaoId)) { const ca = EXT.cartaoPor(ini.cartaoId); if (ca) cartoes.push(ca); }
     const s = sheet(novo ? 'Novo lançamento' : 'Editar lançamento', `
       <div class="tg"><button data-t="saida">Saída</button><button data-t="entrada">Entrada</button></div>
       ${F('Valor (R$)', inp('valor', ini.valor ? numStr(ini.valor) : '', 'inputmode="decimal" placeholder="0,00"'))}
       ${F('Descrição', inp('descricao', ini.descricao || '', 'placeholder="Ex.: Mercado"'))}
       <div class="g2">${F('Categoria', '<select name="categoria"></select>')}${F('Data', inp('data', ini.data, 'type="date"'))}</div>
       <div class="g2">${F('Situação', '<select name="status"></select>')}${DB.fin.contas.length > 1 ? F('Conta', sel('contaId', DB.fin.contas.filter(c => c.ativa !== false || c.id === ini.contaId).map(c => [c.id, c.nome]), ini.contaId)) : ''}</div>
-      ${novo ? `<div class="g2">${F('Repetir', sel('rep', [['nao', 'Não repetir'], ['parc', 'Parcelado (mensal)'], ['mes', 'Todo mês'], ['ano', 'Todo ano']], 'nao'))}<div id="vz" hidden>${F('Quantas vezes', inp('vezes', '2', 'type="number" min="2" max="120" inputmode="numeric"'))}</div></div>` : ''}
+      <div id="pagw"${tipo === 'saida' ? '' : ' hidden'}>${F('Forma de pagamento', sel('pagamento', [...(!ini.pagamento && !ini.cartaoId && !novo ? [['', 'Não informado']] : []), ['credito', 'Crédito'], ['debito', 'Débito'], ['pix', 'Pix'], ['dinheiro', 'Dinheiro']], ini.pagamento || (ini.cartaoId ? 'credito' : (novo ? (S.pagUlt || 'pix') : ''))))}</div>
+      <div id="cartw" hidden>${cartoes.length ? F('Cartão de crédito', sel('cartaoId', cartoes.map(c => [c.id, c.nome]), ini.cartaoId || cartoes[0].id)) : '<p class="hint">Nenhum cartão cadastrado. Cadastre em Finanças › Cartões.</p>'}</div>
+      ${novo ? `<div class="g2">${F('Repetir', sel('rep', [['nao', 'Não repetir'], ['parc', 'Parcelado (mensal)'], ['mes', 'Todo mês'], ['ano', 'Todo ano']], 'nao'))}<div id="vz" hidden>${F('Quantas vezes', inp('vezes', '2', 'type="number" min="2" max="120" inputmode="numeric"'))}</div></div>
+      <div id="pgw" hidden>${F('Parcelas já pagas', inp('pagas', '0', 'type="number" min="0" max="119" inputmode="numeric"'))}</div>` : ''}
+      <p class="hint" id="pv"></p>
       <div class="acts">${novo ? '' : '<button class="btn bad" data-del>Excluir</button>'}<button class="btn" data-ok>Salvar</button></div>`);
     const selCat = s.$('[name=categoria]'), selSt = s.$('[name=status]');
     const catAtual = () => selCat.value;
+    const selPag = s.$('[name=pagamento]'), selCartao = s.$('[name=cartaoId]'), rep = s.$('[name=rep]'), vezesEl = s.$('[name=vezes]'), pagasEl = s.$('[name=pagas]'), valorEl = s.$('[name=valor]'), dataEl = s.$('[name=data]');
+    const lblValor = valorEl.previousElementSibling, lblData = dataEl.previousElementSibling;
+    const credito = () => tipo === 'saida' && selPag && selPag.value === 'credito';
+    const cartaoSel = () => (credito() && selCartao && selCartao.value) ? EXT.cartaoPor(selCartao.value) : null;
+    const limite = (x, a, b) => Math.max(a, Math.min(b, Math.round(num(x)) || 0));
+    let stAnt = null;
+    function atualizar() {                         // reage a cartão, repetição, parcelas e valores
+      const pw0 = s.$('#pagw'); if (pw0) pw0.hidden = tipo !== 'saida';
+      const cw = s.$('#cartw'); if (cw) cw.hidden = !credito();
+      const c = cartaoSel(), r = rep ? rep.value : 'nao', parc = novo && r === 'parc';
+      const n = parc ? limite(vezesEl.value, 2, 120) : 1, k = parc ? limite(pagasEl.value, 0, 119) : 0;
+      const pw = s.$('#pgw'); if (pw) pw.hidden = !parc;
+      lblValor.textContent = parc ? 'Valor de cada parcela (R$)' : 'Valor (R$)';
+      lblData.textContent = c ? (novo ? 'Data da compra' : 'Vencimento da fatura') : parc ? 'Data da 1ª parcela' : 'Data';
+      const trava = novo && (!!c || k > 0);        // compra no cartão e parcelas já pagas ficam pendentes (a pagar)
+      if (trava) { if (!selSt.disabled) stAnt = selSt.value; selSt.value = 'pendente'; selSt.disabled = true; }
+      else if (selSt.disabled) { selSt.disabled = false; if (stAnt) selSt.value = stAnt; stAnt = null; }
+      const pv = s.$('#pv'), valor = num(valorEl.value), data = dataEl.value;
+      let txt = '';
+      if (novo && valor > 0 && dataOk(data)) {
+        if (parc && k >= n) txt = 'As parcelas já pagas devem ser menos que o total de parcelas.';
+        else if (parc) {
+          const ini1 = c ? EXT.vencFatura(c, data, k) : addMeses(data, k), fim = c ? EXT.vencFatura(c, data, n - 1) : addMeses(data, n - 1);
+          txt = `${n}x de ${dinheiro(r2(valor))} = ${dinheiro(r2(valor * n))}` + (k ? ` · ${k} já ${k > 1 ? 'pagas' : 'paga'}, faltam ${n - k} (${dinheiro(r2(valor * (n - k)))})` : '') + ` · ${c ? 'faturas' : 'parcelas'} de ${fmtData(ini1)} a ${fmtData(fim)}.`;
+        } else if (c) txt = r === 'nao' ? `Entra na fatura de ${fmtData(EXT.vencFatura(c, data, 0))} do cartão ${c.nome}.` : `Entra na fatura do cartão ${c.nome} ${r === 'mes' ? 'todo mês' : 'todo ano'}, a partir de ${fmtData(EXT.vencFatura(c, data, 0))}.`;
+      } else if (!novo && c) txt = 'Em compras no cartão, a data é o vencimento da fatura.';
+      pv.textContent = txt;
+    }
     function preencher(cat) {
       s.$$('.tg button').forEach(b => { const on = b.dataset.t === tipo; b.classList.toggle('on', on); b.classList.toggle('s', on && tipo === 'saida'); });
       const cats = [...DB.fin.categorias[tipo]]; if (cat && !cats.includes(cat)) cats.unshift(cat);
       selCat.innerHTML = cats.map(c => `<option${c === cat ? ' selected' : ''}>${esc(c)}</option>`).join('') + '<option value="__nova">+ Nova categoria…</option>';
       const feito = tipo === 'entrada' ? 'recebido' : 'pago', st = ini.status === 'pendente' ? 'pendente' : feito;
       selSt.innerHTML = `<option value="${feito}"${st === feito ? ' selected' : ''}>${tipo === 'entrada' ? 'Recebido' : 'Pago'}</option><option value="pendente"${st === 'pendente' ? ' selected' : ''}>${tipo === 'entrada' ? 'A receber' : 'A pagar'}</option>`;
+      atualizar();
     }
     preencher(ini.categoria);
     s.$$('.tg button').forEach(b => b.onclick = () => { ini.status = selSt.value; tipo = b.dataset.t; preencher(''); });
@@ -208,7 +268,9 @@ const Fin = (() => {
       if (n && !DB.fin.categorias[tipo].includes(n)) { DB.fin.categorias[tipo].push(n); Store.salvar(); }
       preencher(n || DB.fin.categorias[tipo][0]);
     };
-    const rep = s.$('[name=rep]'); if (rep) rep.onchange = () => { s.$('#vz').hidden = rep.value === 'nao'; };
+    if (rep) rep.onchange = () => { s.$('#vz').hidden = rep.value === 'nao'; atualizar(); };
+    [selPag, selCartao, vezesEl, pagasEl, valorEl, dataEl].forEach(e => { if (e) { e.oninput = atualizar; e.onchange = atualizar; } });
+    atualizar();
     if (!novo) s.$('[data-del]').onclick = async () => {
       const seguintes = ini.seriesId ? DB.fin.tx.filter(x => x.seriesId === ini.seriesId && x.data > ini.data) : [];
       let modo = 1;
@@ -216,8 +278,10 @@ const Fin = (() => {
       else if (!(await confirmar('Excluir este lançamento?'))) return;
       const ids = new Set([ini.id, ...(modo === 2 ? seguintes.map(x => x.id) : [])]);
       const removidos = DB.fin.tx.filter(x => ids.has(x.id));
-      DB.fin.tx = DB.fin.tx.filter(x => !ids.has(x.id)); s.fechar(); commit();
-      toast(removidos.length > 1 ? `${removidos.length} lançamentos excluídos` : 'Lançamento excluído', () => { DB.fin.tx.push(...removidos); commit(); });
+      DB.fin.tx = DB.fin.tx.filter(x => !ids.has(x.id));
+      const desfazExt = EXT.aposExcluir ? EXT.aposExcluir(removidos, modo, ini) : null;     // ajusta investimento/plano ligados
+      s.fechar(); commit();
+      toast(removidos.length > 1 ? `${removidos.length} lançamentos excluídos` : 'Lançamento excluído', () => { DB.fin.tx.push(...removidos); if (desfazExt) desfazExt(); commit(); });
     };
     s.$('[data-ok]').onclick = () => {
       const v = vals(s.el), valor = num(v.valor);
@@ -225,14 +289,30 @@ const Fin = (() => {
       if (!dataOk(v.data)) return toast('Informe uma data válida.');
       if (!v.categoria || v.categoria === '__nova') return toast('Escolha uma categoria.');
       const base = { tipo, categoria: catAtual(), descricao: v.descricao.trim(), valor: r2(valor), contaId: v.contaId || ini.contaId || DB.fin.contas[0].id };
-      if (!novo) { Object.assign(t, base, { data: v.data, status: v.status }); }
-      else {
+      const c = cartaoSel();
+      if (credito() && !c) return toast('Escolha o cartão de crédito (ou cadastre um em Cartões).');
+      base.pagamento = tipo === 'saida' ? (v.pagamento || '') : '';
+      if (base.pagamento) S.pagUlt = base.pagamento;
+      if (!base.pagamento) delete base.pagamento;
+      if (!novo) {
+        Object.assign(t, base, { data: v.data, status: v.status }); if (!base.pagamento) delete t.pagamento;
+        if (c) t.cartaoId = c.id; else delete t.cartaoId;
+        if (EXT.statusMudou) EXT.statusMudou(t);
+      } else {
         const r = v.rep || 'nao', n = r === 'nao' ? 1 : Math.max(2, Math.min(120, parseInt(v.vezes) || 2)), sid = n > 1 ? uid('sr') : null;
-        for (let i = 0; i < n; i++) DB.fin.tx.push({
-          id: uid('tx'), ...base, data: addMeses(v.data, i * (r === 'ano' ? 12 : 1)), status: i === 0 ? v.status : 'pendente',
-          recorrente: r === 'mes' || r === 'ano', seriesId: sid, frequencia: r === 'mes' ? 'mensal' : r === 'ano' ? 'anual' : null,
-          ...(r === 'parc' ? { parcela: i + 1, parcelas: n } : {})
-        });
+        const k = r === 'parc' ? limite(v.pagas, 0, 119) : 0;          // parcelas que você já pagou: não são lançadas (não mexem no saldo)
+        if (k >= n && r === 'parc') return toast('As parcelas já pagas devem ser menos que o total de parcelas.');
+        const stIni = (c || k > 0) ? 'pendente' : v.status;
+        for (let i = k; i < n; i++) {
+          const occ = addMeses(v.data, i * (r === 'ano' ? 12 : 1));
+          DB.fin.tx.push({
+            id: uid('tx'), ...base, data: c ? (r === 'parc' ? EXT.vencFatura(c, v.data, i) : EXT.vencFatura(c, occ, 0)) : occ, status: i === 0 ? stIni : 'pendente',
+            recorrente: r === 'mes' || r === 'ano', seriesId: sid, frequencia: r === 'mes' ? 'mensal' : r === 'ano' ? 'anual' : null,
+            ...(c ? { cartaoId: c.id, dataCompra: r === 'parc' ? v.data : occ } : {}),
+            ...(r === 'parc' ? { parcela: i + 1, parcelas: n } : {})
+          });
+        }
+        if (k) toast(`Lançadas as ${n - k} parcelas restantes (de ${n}).`);
       }
       s.fechar(); commit();
     };

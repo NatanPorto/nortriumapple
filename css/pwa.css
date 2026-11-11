@@ -1,0 +1,8 @@
+/* PWA: esconde o campo de avisos (sem notificações no navegador) e centraliza o app em telas largas */
+.f:has([name=avmodo]),#avdef,#avs{display:none!important}
+@media(min-width:700px){
+  html{background:var(--bg)}
+  body{max-width:560px;margin:0 auto;box-shadow:0 0 0 1px var(--ln)}
+  nav.bot{left:50%!important;right:auto!important;width:560px;transform:translateX(-50%)}
+  #fab{right:calc(50% - 280px + 18px)!important}
+}

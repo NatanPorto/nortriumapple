@@ -205,14 +205,8 @@ const Treinos = (() => {
     retomar();
   }
 
-  function bip() {
+  function bip() {                               // só vibra: o app não emite nenhum som
     try { if (navigator.vibrate) navigator.vibrate([250, 100, 250]); } catch (e) { }
-    try {
-      const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
-      const c = new C(), o = c.createOscillator(), g = c.createGain();
-      o.frequency.value = 880; g.gain.value = .15; o.connect(g); g.connect(c.destination); o.start();
-      setTimeout(() => { try { o.stop(); c.close(); } catch (e) { } }, 350);
-    } catch (e) { }
   }
 
   function retomar() {
@@ -221,7 +215,7 @@ const Treinos = (() => {
     const mmss = s_ => p2(Math.floor(s_ / 60)) + ':' + p2(s_ % 60);
     let timer;
     const s = live = sheet(A.nome, `
-      <p class="cron" style="margin:0 0 10px;font-size:20px" id="wk-t">00:00:00</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 10px"><p class="cron" style="margin:0;font-size:20px" id="wk-t">00:00:00</p><button class="btn sec" id="wk-modo" style="padding:8px 14px"></button></div>
       <div class="rest" id="wk-r" hidden><span class="cron" id="wk-rt">00:00</span><button data-rm="-15">−15s</button><button data-rm="15">+15s</button><button data-rm="0">Pular</button></div>
       <div class="f" style="margin-bottom:12px"><span>Descanso padrão entre séries</span><select id="wk-pad">${[45, 60, 90, 120, 150, 180, 240].map(v => `<option value="${v}"${v === (DB.cfg.descanso || 90) ? ' selected' : ''}>${v < 120 ? v + ' s' : (v / 60).toString().replace('.', ',') + ' min'}</option>`).join('')}</select></div>
       <div id="wk"></div>
@@ -258,7 +252,7 @@ const Treinos = (() => {
     s.$('#wk-pad').onchange = e => { DB.cfg.descanso = +e.target.value; Store.salvar(); };
 
     /* --- exercícios e séries --- */
-    function desenhar() {
+    function desenharLista() {
       s.$('#wk').innerHTML = A.exs.length ? A.exs.map((e, i) => {
         const u = ultimaSerie(e.nome); let n = 0;
         return `<div class="ex"><h4>${esc(e.nome)}</h4><small class="mu">${[u ? `Último: ${u.reps} × ${numStr(u.carga)} kg` : 'Sem histórico', e.descanso ? 'descanso ' + e.descanso + ' s' : ''].filter(Boolean).join(' · ')}</small>
@@ -288,6 +282,43 @@ const Treinos = (() => {
       });
       s.$$('[data-mv]').forEach(b => b.onclick = () => { const [i, d] = b.dataset.mv.split('.').map(Number), k = i + d; if (k < 0 || k >= A.exs.length) return; [A.exs[i], A.exs[k]] = [A.exs[k], A.exs[i]]; marca(); desenhar(); });
     }
+
+    /* --- modo foco: um exercício e uma série por vez --- */
+    const fx = { i: null };
+    const modoFoco = () => DB.cfg.foco !== false;
+    function desenharFoco() {
+      const pend = k => A.exs[k].sets.some(x => !x.ok);
+      let i = fx.i;
+      if (i == null || i < 0 || i >= A.exs.length) { i = A.exs.findIndex((_, k) => pend(k)); if (i < 0) i = A.exs.length - 1; }
+      fx.i = i;
+      const e = A.exs[i]; let j = e.sets.findIndex(x => !x.ok); const feito = j < 0; if (feito) j = Math.max(0, e.sets.length - 1);
+      const x = e.sets[j]; if (!x) { e.sets.push({ reps: 10, carga: 0, ok: false, aq: false }); return desenharFoco(); }
+      const u = ultimaSerie(e.nome), todos = A.exs.every(y => y.sets.every(z => z.ok));
+      const ls = e.sets.map((y, k) => `<div class="${k === j && !feito ? 'cur' : ''}"><span style="width:30px">${y.aq ? 'A' : 'S' + (k + 1)}</span><span style="flex:1">${y.ok || k === j ? numStr(y.carga) + ' kg × ' + numStr(y.reps) : 'pendente'}</span><span>${y.ok ? 'feita' : k === j ? '▸' : ''}</span></div>`).join('');
+      const passo = (c, rot, un) => `<div class="cl">${rot}</div><div class="st"><button data-fs="${c}.-1" aria-label="Menos ${rot.toLowerCase()}">−</button><div class="v">${numStr(x[c])}${un ? `<small> ${un}</small>` : ''}</div><button data-fs="${c}.1" aria-label="Mais ${rot.toLowerCase()}">+</button></div>`;
+      s.$('#wk').innerHTML = `<div class="foco"><div class="fh">Exercício ${i + 1} de ${A.exs.length}</div><h2>${esc(e.nome)}</h2>
+        <small class="mu">${feito ? 'Todas as séries feitas' : `Série ${j + 1} de ${e.sets.length}`}${u ? ` · último: ${u.reps} × ${numStr(u.carga)} kg` : ''}</small>
+        <div class="ls">${ls}</div>${feito ? '' : passo('carga', 'Carga', 'kg') + passo('reps', 'Repetições', '')}
+        <div class="go">${todos ? '<small class="mu">Treino completo. Role para baixo e finalize.</small>' : feito ? '<button class="btn block" data-fnx>Próximo exercício</button>' : '<button class="btn block" data-fok>Concluir série</button>'}</div>
+        <div class="exb"><button class="btn sec" data-fpv>‹ Anterior</button><button class="btn sec" data-fnx>Próximo ›</button><button class="btn sec" data-fad>+ série</button><button class="btn sec" data-faq>${x.aq ? 'Tirar aquecimento' : 'Aquecimento'}</button></div></div>`;
+      s.$$('[data-fs]').forEach(b => b.onclick = () => { const [c, d] = b.dataset.fs.split('.'); x[c] = Math.max(0, Math.round(((+x[c] || 0) + Number(d) * (c === 'carga' ? 2.5 : 1)) * 100) / 100); marca(); desenharFoco(); });
+      const ok = s.$('[data-fok]');
+      if (ok) ok.onclick = () => {
+        x.ok = true;
+        if (!A.exs.every(y => y.sets.every(z => z.ok))) { const d = e.descanso || DB.cfg.descanso || 90, dd = x.aq ? Math.min(d, 45) : d; A.descansoAte = Date.now() + dd * 1000; A.descansoTot = dd; }
+        if (!e.sets.some(y => !y.ok)) fx.i = null;
+        marca(); tick(); desenharFoco();
+      };
+      s.$$('[data-fnx]').forEach(b => b.onclick = () => { fx.i = Math.min(A.exs.length - 1, i + 1); desenharFoco(); });
+      s.$('[data-fpv]').onclick = () => { fx.i = Math.max(0, i - 1); desenharFoco(); };
+      s.$('[data-fad]').onclick = () => { e.sets.push({ reps: x.reps, carga: x.carga, ok: false, aq: false }); marca(); desenharFoco(); };
+      s.$('[data-faq]').onclick = () => { x.aq = !x.aq; marca(); desenharFoco(); };
+    }
+    function desenhar() {
+      s.$('#wk-modo').textContent = modoFoco() ? 'Ver lista' : 'Modo foco';
+      if (modoFoco() && A.exs.length) desenharFoco(); else desenharLista();
+    }
+    s.$('#wk-modo').onclick = () => { DB.cfg.foco = !modoFoco(); Store.salvar(); desenhar(); };
     desenhar();
     s.$('#wk-add').onclick = () => pedirNome('Adicionar exercício', '', n => { A.exs.push(exDe(n, 3, 10, 0, 0)); marca(); desenhar(); });
     s.$('select[name=rpe]').onchange = e => { A.rpe = e.target.value; marca(); };

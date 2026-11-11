@@ -71,11 +71,11 @@ const Saude = (() => {
       <div class="card"><div class="gr">${vals_.map(v => `<div><i style="height:${Math.round(v / pico * 100)}%"></i></div>`).join('')}</div>
         <div class="gl">${dias.map((d, k) => `<span>${per === 7 ? DIAS[pd(d).getDay()] : (k % 5 === 0 ? String(+d.slice(8)) : '')}</span>`).join('')}</div>
         <small class="mu" style="display:block;margin-top:8px">${comReg.length ? `Média nos dias com registro: ${fmtMl(media)}` : 'Nenhum registro neste período.'}${meta && comReg.length ? ` · meta atingida em ${naMeta} de ${per} dias` : ''}</small></div>
-      <div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn sec" id="ag-m">Meta e botões</button><button class="btn sec" id="ag-l">Lembretes de água</button></div>`;
+      <div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn sec" id="ag-m">Meta e botões</button></div>`;
     $$('[data-ag]', el).forEach(b => b.onclick = () => addAgua(+b.dataset.ag));
     $$('[data-r]', el).forEach(r => r.onclick = () => formAguaReg(ag().reg.find(x => x.id === r.dataset.r)));
     $$('[data-p]', el).forEach(b => b.onclick = () => { S.per = +b.dataset.p; refresh(); });
-    $('#ag-o', el).onclick = formAguaValor; $('#ag-m', el).onclick = formAguaMeta; $('#ag-l', el).onclick = criarLembreteAgua;
+    $('#ag-o', el).onclick = formAguaValor; $('#ag-m', el).onclick = formAguaMeta;
   }
 
   /* =============================== DIETA =============================== */
@@ -441,8 +441,8 @@ const Saude = (() => {
     ({ diario: rDiario, alim: rAlimentos, rec: rReceitas, comp: rCompras })[S.dsub]($('#di-c', el));
   }
   const render = (el, area) => (area === 'agua' ? rAgua : rDieta)(el);
-  const fab = area => area === 'agua' ? formAguaValor : S.dsub === 'diario' ? () => escolherRefeicao(S.dia) : S.dsub === 'alim' ? () => formAlimento(null) : S.dsub === 'rec' ? () => formReceita(null) : formCompraItem;
-  const fabLabel = area => area === 'agua' ? 'Registrar água' : S.dsub === 'diario' ? 'Adicionar alimento' : S.dsub === 'alim' ? 'Novo alimento' : S.dsub === 'rec' ? 'Nova receita' : 'Novo item';
+  const fab = area => area === 'relogio' ? null : area === 'agua' ? formAguaValor : S.dsub === 'diario' ? () => escolherRefeicao(S.dia) : S.dsub === 'alim' ? () => formAlimento(null) : S.dsub === 'rec' ? () => formReceita(null) : formCompraItem;
+  const fabLabel = area => area === 'relogio' ? '' : area === 'agua' ? 'Registrar água' : S.dsub === 'diario' ? 'Adicionar alimento' : S.dsub === 'alim' ? 'Novo alimento' : S.dsub === 'rec' ? 'Nova receita' : 'Novo item';
 
   /* ---------- cards da tela Hoje ---------- */
   const cardAgua = () => {

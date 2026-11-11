@@ -49,14 +49,14 @@ const numStr = n => (n || n === 0) ? String(n).replace('.', ',') : '';
    ========================================================= */
 const DEF = () => ({
   v: 1,
-  cfg: { tema: 'escuro', v2: false, notif: { ativo: true, antecedencia: 15, hora: '08:00', horaFim: '20:00', dias: 14, tipos: { evento: true, conta: true, treino: true, prova: true, tarefa: true } }, pin: null, salt: null, lockMin: 1, nome: '', ultimoBackup: null, slot: 0, descanso: 90 },
+  cfg: { tema: 'escuro', estilo: 'editorial', foco: true, v2: false, notif: { ativo: true, antecedencia: 15, hora: '08:00', horaFim: '20:00', dias: 14, tipos: { evento: true, conta: true, treino: true, prova: true, tarefa: true } }, abas: { hoje: true, agenda: true, fin: true, treino: true, estudo: true, trab: true }, pin: null, salt: null, lockMin: 1, nome: '', ultimoBackup: null, slot: 0, descanso: 90 },
   fin: {
     tx: [],
     contas: [{ id: 'c_principal', nome: 'Conta principal', tipo: 'banco', saldoInicial: 0, ativa: true }],
     transferencias: [],
     categorias: { entrada: ['Salário', 'Vendas', 'Outros'], saida: ['Moradia', 'Mercado', 'Transporte', 'Saúde', 'Lazer', 'Contas', 'Outros'] },
     orcamentos: {},
-    extras: {}                                   // cartões, dívidas, metas… (importados, ainda sem tela)
+    extras: {}                                   // cartões, dívidas, metas, investimentos… (ver js/fin-extras.js)
   },
   agenda: { eventos: [] },
   agua: { meta: 0, rapidos: [200, 300, 500], reg: [] },        // reg: { id, data, hora, ml }
@@ -65,6 +65,7 @@ const DEF = () => ({
     tipos: ['Café da manhã', 'Lanche da manhã', 'Almoço', 'Lanche da tarde', 'Jantar', 'Ceia'],
     alimentos: [], refeicoes: [], modelos: [], receitas: [], compras: []
   },
+  relogio: { conectado: false, ultima: null, dias: {} },        // dados do smartwatch via Health Connect (js/relogio.js)
   treino: { fichas: [], sessoes: [], medidas: [], andamento: null },   // andamento = treino em curso (salvo a cada toque)
   estudo: { materias: [], sessoes: [], itens: [], aulas: [], topicos: [], cursos: [], disciplinas: [] },
   avisos: [],                                  // lembretes avulsos (só notificam, não vão para a agenda)
@@ -72,6 +73,11 @@ const DEF = () => ({
   timers: {}
 });
 let DB = DEF();
+
+/* ---------- abas ativas (Ajustes > Abas do app) ---------- */
+const ABAS = [['hoje', 'Hoje'], ['agenda', 'Agenda'], ['fin', 'Finanças'], ['treino', 'Saúde'], ['estudo', 'Estudos'], ['trab', 'Trabalho']];
+const abaOn = id => { const a = DB.cfg && DB.cfg.abas; return !a || a[id] !== false; };
+const abasAtivas = () => ABAS.map(a => a[0]).filter(abaOn);
 
 function merge(base, src) {
   if (!src || typeof src !== 'object' || Array.isArray(src)) return base;
@@ -227,12 +233,6 @@ async function salvarArquivo(sub, nome, texto, mime = 'text/plain') {
       return { ok: true, caminho };
     } catch (e) { console.error('SaveDocuments falhou, usando download:', e); }
   }
-  if (!window.cordova && navigator.canShare && navigator.share) {          // PWA/iOS: folha de compartilhamento (Salvar em Arquivos)
-    try {
-      const f = new File([texto], nome, { type: mime });
-      if (navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: nome }); return { ok: true, caminho: nome }; }
-    } catch (e) { if (e && e.name === 'AbortError') return { ok: false }; console.error('Compartilhar falhou, usando download:', e); }
-  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([texto], { type: mime })); a.download = nome;
   document.body.appendChild(a); a.click();
@@ -256,11 +256,13 @@ function refresh() {
 }
 function commit() { Store.salvar(); refresh(); }
 function go(id) {
+  if (!abaOn(id)) id = abasAtivas()[0] || 'hoje';     // aba desligada: abre a primeira que estiver ligada
   modAtual = id; document.body.dataset.mod = id;
   $('#titulo').textContent = MODS[id].nome;
   const ic = $('#ticon'); if (ic && typeof ICONES !== 'undefined') ic.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONES[id] || ''}</svg>`;
-  const navId = (id === 'estudo' || id === 'trab') ? 'mais' : id;      // Estudos e Trabalho ficam dentro de "Mais"
-  $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.id === navId));
+  $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.id === id));
+  const on = $('#nav button.on'), nv = $('#nav');
+  if (on && nv) { const x = on.offsetLeft - (nv.clientWidth - on.offsetWidth) / 2; if (nv.scrollTo) nv.scrollTo({ left: x, behavior: 'smooth' }); else nv.scrollLeft = x; }
   $('#main').scrollTop = 0;
   refresh();
 }
