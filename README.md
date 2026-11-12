@@ -13,7 +13,7 @@ Versão web instalável do NORTRIUM (finanças, agenda, saúde, estudos e trabal
 - **iPhone (Safari):** Compartilhar › Adicionar à Tela de Início. Instalado, o iOS não apaga os dados por inatividade.
 
 ## Atualizar depois
-Troque o número em `VERSAO`, no começo do `sw.js`, a cada publicação. Sem isso, quem já visitou continua vendo a versão antiga em cache.
+Troque o número em `VERSAO`, no começo do `sw.js`, a cada publicação (nesta versão: `nortrium-1.13.0`). Sem isso, quem já visitou continua vendo a versão antiga em cache.
 
 ## O que mudou em relação ao app Android
 Removido, por depender do Android: notificações agendadas, widgets da tela inicial, relógio (Health Connect) e backup automático em Documentos.

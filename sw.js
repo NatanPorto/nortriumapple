@@ -1,5 +1,5 @@
 /* NORTRIUM PWA — funciona offline depois da primeira visita. Ao publicar uma versão nova, troque o número em VERSAO. */
-const VERSAO = 'nortrium-1.12.0';
+const VERSAO = 'nortrium-1.13.0';
 const ARQUIVOS = [
  "./",
  "css/app.css",

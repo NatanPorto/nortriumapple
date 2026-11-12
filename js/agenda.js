@@ -93,6 +93,13 @@ const Agenda = (() => {
     return out.filter(i => abaOn(aba[i.k])).sort((a, b) => (a.hora || '99:99').localeCompare(b.hora || '99:99'));
   }
 
+  function saldoDia(d) {                    // saldo da conta nesse dia: real se já passou, previsto se for futuro
+    const hj = hoje(), v = Fin.saldoEm(d), m = Fin.movDia(d), fut = d > hj, sd = Fin.semDataTotal();
+    const rot = d === hj ? 'Saldo hoje' : fut ? 'Saldo previsto neste dia' : 'Saldo no fim deste dia';
+    return `<div class="card" data-saldo style="margin-bottom:8px;cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:baseline"><small class="mu">${rot}</small><b class="n ${v < 0 ? 'neg' : ''}">${dinheiro(v)}</b></div>
+      ${m.ent || m.sai ? `<small class="mu">${m.ent ? `<span class="pos">+ ${dinheiro(m.ent)}</span>` : ''}${m.ent && m.sai ? ' · ' : ''}${m.sai ? `<span class="neg">− ${dinheiro(m.sai)}</span>` : ''} neste dia</small>` : ''}
+      ${fut ? '<small class="mu" style="display:block">Considera o que está a pagar e a receber até esta data' + (sd.saida > 0 ? '; não inclui os ' + dinheiro(sd.saida) + ' sem data marcada' : '') + '.</small>' : ''}</div>`;
+  }
   function render(el) {
     const [y, mo] = S.mes.split('-').map(Number), primeiro = S.mes + '-01', ini = inicioSemana(primeiro), hj = hoje();
     const dias = []; for (let i = 0; i < 42; i++) dias.push(addDias(ini, i));
@@ -105,7 +112,9 @@ const Agenda = (() => {
     el.innerHTML = `<div class="mnav"><button data-m="-1" aria-label="Mês anterior">‹</button><b>${MESES[mo - 1]} ${y}</b><button data-m="1" aria-label="Próximo mês">›</button></div>
       <div class="cal">${['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(x => `<div class="wd">${x}</div>`).join('')}${celulas.join('')}</div>
       <div class="dia" style="display:flex;justify-content:space-between"><span>${fmtDataL(S.sel)}${S.sel === hj ? ' · hoje' : ''}</span>${S.sel !== hj ? '<a href="#" id="vh" style="color:var(--cor)">Ir para hoje</a>' : ''}</div>
+      ${abaOn('fin') ? saldoDia(S.sel) : ''}
       <div class="card" style="padding:2px 14px">${itens.length ? itens.map(linha).join('') : '<div class="empty">Nada neste dia.<br>Toque em + para criar um compromisso ou hábito.</div>'}</div>`;
+    const sdc = $('[data-saldo]', el); if (sdc) sdc.onclick = () => { Fin.S.seg = 'lanc'; go('fin'); };
     $$('[data-m]', el).forEach(b => b.onclick = () => { S.mes = addMeses(S.mes + '-01', +b.dataset.m).slice(0, 7); S.sel = S.mes === hj.slice(0, 7) ? hj : S.mes + '-01'; refresh(); });
     $$('[data-d]', el).forEach(b => b.onclick = () => { S.sel = b.dataset.d; S.mes = S.sel.slice(0, 7); refresh(); });
     const vh = $('#vh', el); if (vh) vh.onclick = e => { e.preventDefault(); S.sel = hj; S.mes = hj.slice(0, 7); refresh(); };

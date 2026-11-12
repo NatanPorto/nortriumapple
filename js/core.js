@@ -56,6 +56,9 @@ const DEF = () => ({
     transferencias: [],
     categorias: { entrada: ['Salário', 'Vendas', 'Outros'], saida: ['Moradia', 'Mercado', 'Transporte', 'Saúde', 'Lazer', 'Contas', 'Outros'] },
     orcamentos: {},
+    subcats: { entrada: {}, saida: {} },        // subcategorias: { saida: { 'Mercado': ['Feira', …] } }
+    series: [],                                 // gastos/ganhos que se repetem sem data final (ver Fin.sincSeries)
+    semData: [],                                // valores que vão sair/entrar, mas sem data certa
     extras: {}                                   // cartões, dívidas, metas, investimentos… (ver js/fin-extras.js)
   },
   agenda: { eventos: [] },

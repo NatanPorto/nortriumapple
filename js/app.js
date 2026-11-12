@@ -129,7 +129,7 @@ async function importarFluxo(o) {
   const msg = `Importar do Fluxo de Caixa: ${tx.length} lançamentos, ${contas.length || 1} conta(s)${ign ? `, ${ign} registros inválidos ignorados` : ''}. As finanças atuais serão substituídas.`;
   if (!(await confirmar(msg, 'Importar'))) return;
   const fin = DB.fin;
-  fin.tx = tx;
+  fin.tx = tx; fin.series = []; fin.semData = [];
   fin.contas = contas.length ? contas : [{ id: 'c_principal', nome: 'Conta principal', tipo: 'banco', saldoInicial: Number(o.saldoInicial) || 0, ativa: true }];
   const ids = new Set(fin.contas.map(c => c.id));
   fin.transferencias = (Array.isArray(o.transferencias) ? o.transferencias : []).filter(t => t && dataOk(t.data) && ids.has(t.origemId) && ids.has(t.destinoId) && t.valor > 0);

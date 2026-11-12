@@ -49,12 +49,13 @@
   E.cartaoPor = cartaoPor;
   E.vencFatura = vencFatura;
   E.detalheFatura = (id, data) => { const c = cartaoPor(id); if (c) detalheFatura(c, data); };
+  E.simularCompra = () => formSimCompra();
   E.pagarFatura = (id, data) => { const c = cartaoPor(id); if (c) pagarFatura(c, data); };
 
   function pagarFatura(c, data) {
     const itens = txCartao(c).filter(t => t.data === data && t.status === 'pendente'); if (!itens.length) return;
-    itens.forEach(t => { t.status = 'pago'; }); commit();
-    toast('Fatura marcada como paga', () => { itens.forEach(t => { t.status = 'pendente'; }); commit(); });
+    itens.forEach(t => { t.status = 'pago'; t.pagoEm = hoje(); }); commit();
+    toast('Fatura marcada como paga', () => { itens.forEach(t => { t.status = 'pendente'; delete t.pagoEm; }); commit(); });
   }
 
   function rCart(el) {
@@ -70,12 +71,13 @@
         <div class="sum" style="margin:10px 0 6px"><div><small>Limite</small><b class="n">${dinheiro(N(c.limite))}</b></div><div><small>Disponível</small><b class="n ${disp < 0 ? 'neg' : ''}">${dinheiro(disp)}</b></div><div><small>Fatura atual</small><b class="n">${dinheiro(inv ? inv.total : 0)}</b></div></div>
         <small class="mu">${inv ? `Vence ${fmtData(inv.data)}${inv.data < hj ? ' — <span class="neg">vencida</span>' : ''}` : 'Sem fatura em aberto.'}</small></div>`;
     }).join('') : '<div class="empty">Nenhum cartão cadastrado.</div>') +
-      `<div class="acts" style="justify-content:flex-start;margin-bottom:12px"><button class="btn sec" id="nk">Novo cartão</button>${cs.some(c => c.ativo !== false) ? '<button class="btn" id="nb">Nova compra</button>' : ''}</div>` +
+      `<div class="acts" style="justify-content:flex-start;margin-bottom:12px"><button class="btn sec" id="nk">Novo cartão</button>${cs.some(c => c.ativo !== false) ? '<button class="btn" id="nb">Nova compra</button><button class="btn sec" id="ns">Simular compra</button>' : ''}</div>` +
       (rows.length ? `<div class="dia">Faturas</div><div class="card" style="padding:2px 14px">${rows.slice(0, 24).map(r => `<div class="row${r.paga ? ' done' : ''}" data-f="${esc(r.c.id)}|${r.data}">${r.paga ? '' : `<button class="ck" data-pay aria-label="Marcar fatura como paga"></button>`}
         <div class="t"><b>${esc(r.c.nome)}</b><small>${r.itens.length} compra(s) · vence ${fmtData(r.data)}${r.paga ? ' · paga' : r.data < hj ? ' · <span class="neg">vencida</span>' : ''}</small></div><span class="n ${r.paga ? 'mu' : 'neg'}">${dinheiro(r.total)}</span></div>`).join('')}</div>` : '');
     $$('[data-c]', el).forEach(b => { $('[data-ed]', b).onclick = () => formCartao(cartaoPor(b.dataset.c)); });
     $('#nk', el).onclick = () => formCartao(null);
     const nb = $('#nb', el); if (nb) nb.onclick = () => formCompra();
+    const ns = $('#ns', el); if (ns) ns.onclick = () => formSimCompra();
     $$('[data-f]', el).forEach(r => r.onclick = e => {
       const [cid, data] = r.dataset.f.split('|'), c = cartaoPor(cid);
       if (e.target.closest('[data-pay]')) return pagarFatura(c, data);
@@ -146,16 +148,16 @@
     };
   }
 
-  function formCompra() {
+  function formCompra(pre = {}) {
     const ativos = X().cartoes.filter(c => c.ativo !== false);
     if (!ativos.length) { toast('Cadastre um cartão primeiro.'); return formCartao(null); }
     const cats = DB.fin.categorias.saida;
     const s = sheet('Compra no cartão', `
-      ${F('Cartão', sel('cartaoId', ativos.map(c => [c.id, c.nome]), ativos[0].id))}
-      ${F('Valor total (R$)', inp('valor', '', 'inputmode="decimal" placeholder="0,00"'))}
-      ${F('Descrição', inp('descricao', '', 'placeholder="Ex.: Tênis"'))}
-      <div class="g2">${F('Categoria', sel('categoria', cats, cats[0]))}${F('Data da compra', inp('data', hoje(), 'type="date"'))}</div>
-      <div class="g2">${F('Parcelas', inp('parcelas', '1', 'type="number" min="1" max="60" inputmode="numeric"'))}${F('Já pagas', inp('pagas', '0', 'type="number" min="0" max="59" inputmode="numeric"'))}</div>
+      ${F('Cartão', sel('cartaoId', ativos.map(c => [c.id, c.nome]), pre.cartaoId || ativos[0].id))}
+      ${F('Valor total (R$)', inp('valor', pre.valor ? numStr(pre.valor) : '', 'inputmode="decimal" placeholder="0,00"'))}
+      ${F('Descrição', inp('descricao', pre.descricao || '', 'placeholder="Ex.: Tênis"'))}
+      <div class="g2">${F('Categoria', sel('categoria', cats, cats[0]))}${F('Data da compra', inp('data', pre.data || hoje(), 'type="date"'))}</div>
+      <div class="g2">${F('Parcelas', inp('parcelas', String(pre.parcelas || 1), 'type="number" min="1" max="60" inputmode="numeric"'))}${F('Já pagas', inp('pagas', '0', 'type="number" min="0" max="59" inputmode="numeric"'))}</div>
       <p class="hint" id="pv"></p>
       <div class="acts"><button class="btn" data-ok>Lançar compra</button></div>`);
     const ler = () => {
@@ -185,6 +187,41 @@
       }
       s.fechar(); commit(); toast(n > 1 ? (k ? `Lançadas as ${n - k} parcelas restantes (de ${n}).` : `Compra lançada em ${n}x.`) : 'Compra lançada.');
     };
+  }
+
+  /* simulação de compra: mostra o efeito nas faturas, no limite e no saldo previsto SEM lançar nada */
+  function formSimCompra() {
+    const ativos = X().cartoes.filter(c => c.ativo !== false);
+    if (!ativos.length) { toast('Cadastre um cartão primeiro.'); return formCartao(null); }
+    const s = sheet('Simular compra no cartão', `
+      ${F('Cartão', sel('cartaoId', ativos.map(c => [c.id, c.nome]), ativos[0].id))}
+      ${F('Valor da compra (R$)', inp('valor', '', 'inputmode="decimal" placeholder="0,00"'))}
+      <div class="g2">${F('Parcelas', inp('parcelas', '1', 'type="number" min="1" max="60" inputmode="numeric"'))}${F('Data da compra', inp('data', hoje(), 'type="date"'))}</div>
+      ${F('Juros ao mês (%), se houver', inp('juros', '', 'inputmode="decimal" placeholder="0"'))}
+      <div id="res"></div>
+      <div class="acts"><button class="btn" data-ok hidden>Lançar de verdade</button></div>`);
+    const calc = () => {
+      const v = vals(s.el), c = cartaoPor(v.cartaoId), valor = num(v.valor), n = Math.max(1, Math.min(60, Math.round(num(v.parcelas)) || 1)), j = Math.max(0, num(v.juros) || 0) / 100;
+      const box = s.$('#res'), ok = s.$('[data-ok]');
+      if (!c || !(valor > 0) || !dataOk(v.data)) { box.innerHTML = ''; ok.hidden = true; return; }
+      const pm = j > 0 && n > 1 ? valor * j / (1 - Math.pow(1 + j, -n)) : valor / n, cada = r2(pm), total = r2(cada * n - (j > 0 ? 0 : r2(cada * n) - valor));
+      const totalPago = j > 0 ? r2(pm * n) : r2(valor), disp = r2(N(c.limite) - comprometido(c)), apos = r2(disp - totalPago);
+      const linhas = []; let acum = 0;
+      for (let i = 0; i < n; i++) {
+        const venc = vencFatura(c, v.data, i), val = i === n - 1 ? r2(totalPago - acum) : cada; acum = r2(acum + val);
+        const atual = soma(txCartao(c).filter(t => t.data === venc && t.status === 'pendente').map(t => t.valor));
+        const sBef = Fin.saldoEm(venc), sAft = r2(sBef - acum);
+        linhas.push({ venc, val, atual, nova: r2(atual + val), sBef, sAft });
+      }
+      const min = Math.min(...linhas.map(l => l.sAft)), neg = linhas.find(l => l.sAft < 0);
+      box.innerHTML = `<div class="card" style="margin:10px 0"><div class="sum"><div><small>${n}x de</small><b class="n">${dinheiro(cada)}</b></div><div><small>Total</small><b class="n">${dinheiro(totalPago)}</b></div><div><small>${j > 0 ? 'Juros' : 'Limite livre'}</small><b class="n ${j > 0 ? 'neg' : apos < 0 ? 'neg' : ''}">${j > 0 ? dinheiro(r2(totalPago - valor)) : dinheiro(apos)}</b></div></div>
+        <small class="mu">Limite disponível: ${dinheiro(disp)} → ${dinheiro(apos)}${apos < 0 ? ' <span class="neg">(estoura o limite)</span>' : ''}</small></div>
+        <div class="dia">Fatura por fatura</div><div class="card" style="padding:2px 14px">${linhas.slice(0, 24).map(l => `<div class="row"><div class="t"><b>${fmtData(l.venc)}</b><small style="display:block;white-space:normal">Fatura: ${dinheiro(l.atual)} → <b>${dinheiro(l.nova)}</b></small><small style="display:block;white-space:normal">Saldo previsto: ${dinheiro(l.sBef)} → <span class="${l.sAft < 0 ? 'neg' : ''}">${dinheiro(l.sAft)}</span></small></div><span class="n neg">− ${dinheiro(l.val)}</span></div>`).join('')}</div>
+        <p class="hint">${neg ? `Atenção: o saldo previsto fica negativo em ${fmtData(neg.venc)} (${dinheiro(neg.sAft)}).` : `Em nenhuma fatura o saldo previsto fica negativo (o menor é ${dinheiro(min)}).`} Nada foi lançado.</p>`;
+      ok.hidden = false;
+    };
+    s.$$('input,select').forEach(e => { e.oninput = calc; e.onchange = calc; });
+    s.$('[data-ok]').onclick = () => { const v = vals(s.el); s.fechar(); formCompra({ cartaoId: v.cartaoId, valor: num(v.valor), parcelas: Math.round(num(v.parcelas)) || 1, data: v.data }); };
   }
 
   /* =========================================================
@@ -340,7 +377,7 @@
   function projetar(dias, comAp = prevAp) {
     const hj = hoje(), fim = addDias(hj, dias), start = Fin.saldoTotal(), porDia = {}; let ent = 0, sai = 0;
     const add = (d, v) => { porDia[d] = (porDia[d] || 0) + v; if (d <= fim) { if (v >= 0) ent += v; else sai += -v; } };
-    DB.fin.tx.forEach(t => { if (!comAp && t.planoData && t.status === 'pendente') return; const v = t.tipo === 'entrada' ? t.valor : -t.valor; if (t.data > hj) add(t.data, v); else if (t.status === 'pendente') add(hj, v); });
+    DB.fin.tx.forEach(t => { if (!comAp && t.planoData && t.status === 'pendente') return; const v = t.tipo === 'entrada' ? t.valor : -t.valor; if (t.status === 'pendente') add(t.data > hj ? t.data : hj, v); else if (Fin.efData(t) > hj) add(Fin.efData(t), v); });
     const meses = Math.max(1, Math.ceil(dias / 30)), pagas = new Array(meses).fill(0);
     dividasAtivas().forEach(d => { let ant = 0; for (let m = 1; m <= meses; m++) { const p = simular(d, m).pago; pagas[m - 1] += p - ant; ant = p; } });
     const serie = []; let run = start, dividas = 0, min = null, neg = null;
@@ -526,8 +563,8 @@
   E.sincPlanos = sincPlanos;
   function confirmarPlano(id) {
     const t = DB.fin.tx.find(x => x.id === id); if (!t) return;
-    t.status = 'pago'; E.statusMudou(t); commit();
-    toast('Aporte confirmado', () => { t.status = 'pendente'; E.statusMudou(t); commit(); });
+    t.status = 'pago'; t.pagoEm = hoje(); E.statusMudou(t); commit();
+    toast('Aporte confirmado', () => { t.status = 'pendente'; delete t.pagoEm; E.statusMudou(t); commit(); });
   }
   function pularPlano(id) {
     const t = DB.fin.tx.find(x => x.id === id); if (!t) return;

@@ -23,7 +23,7 @@ const Estudos = (() => {
   const stLabel = t => t.status === 'novo' ? 'Não estudado' : t.status === 'dominado' ? 'Dominado' : devida(t) ? 'Revisar' : 'Estudando';
   const revDevidas = () => topL().filter(devida).sort((a, b) => a.proxRev.localeCompare(b.proxRev));
   const atrasados = () => DB.estudo.itens.filter(i => !i.feito && i.data < hoje()).sort((a, b) => a.data.localeCompare(b.data));
-  const pend = () => ({ rev: revDevidas().length, atras: atrasados().length });
+  const pend = () => ({ rev: revDevidas().length, atras: atrasados().length, nota: semNota().length });
   function primeiroEstudo(t) { t.status = 'estudando'; t.nivel = 0; t.ultima = hoje(); t.proxRev = addDias(hoje(), INT[0]); }
   function revisar(t, q) {                              // q: 0 difícil, 1 bom, 2 fácil
     t.ultima = hoje();
@@ -42,6 +42,30 @@ const Estudos = (() => {
     return { max, alvo, av, com, pend: pd_, Pc, Pp, atual: Pc ? C / Pc : null, need: (alvo && Pp) ? (alvo * (Pc + Pp) - C) / Pp : null };
   }
   const n1 = n => numStr(Math.round(n * 100) / 100);
+
+  /* situação da matéria: usa as regras da instituição (Curso) se a matéria veio de uma disciplina; senão, as regras da própria matéria */
+  const discDe = m => (DB.estudo.disciplinas || []).find(d => d.materiaId === m.id);
+  function situacao(m) {
+    const d = discDe(m), c = d ? (DB.estudo.cursos || []).find(x => x.id === d.cursoId) : null;
+    const c2 = c || { regras: { max: m.notaMax || 10, mediaAprov: m.mediaAlvo || 0, exame: !!m.exameMin, exameMin: m.exameMin || 0, exameMedia: m.exameMedia || 5, exameVale: 50, freqMin: 0, casas: 1 } };
+    const R = Curso.reg(c2); if (!(R.mediaAprov > 0)) return null;
+    const av = DB.estudo.itens.filter(i => i.materiaId === m.id && i.tipo !== 'revisao' && i.peso > 0).map(i => ({ peso: i.peso, nota: typeof i.nota === 'number' ? i.nota : null }));
+    const e = Curso.calc({ aval: av, aulasTotal: d ? d.aulasTotal : 0, faltas: d ? d.faltas : 0, exame: d ? d.exame : null }, c2);
+    return { e, R, d, c };
+  }
+  function textoSit(m) {                                   // { cls, txt } ou null
+    const S_ = situacao(m); if (!S_ || S_.e.sit === 'vazio') return null;
+    const { e, R } = S_, q = e.pend.length, rest = q === 1 ? 'na avaliação que falta' : `na média das ${q} avaliações que faltam`;
+    if (e.label === 'Reprovado por falta') return { cls: 'neg', txt: 'Reprovado por falta: passou do limite de faltas.' };
+    if (e.sit === 'aprov') return { cls: 'pos', txt: e.media !== null ? `Aprovado${typeof (S_.d || {}).exame === 'number' ? ' na prova final' : ''}: média ${n1(e.mediaFinal || e.media)} (mínimo ${n1(R.mediaAprov)}${e.mediaFinal ? '; na final ' + n1(R.exameMedia) : ''}).` : 'Aprovação garantida: o que falta não muda o resultado.' };
+    if (e.sit === 'andamento') return { cls: '', txt: `Em andamento: para passar direto precisa de ${n1(e.needAprov)} ${rest}.` + (R.exame && e.needExame !== null && e.needExame <= R.max ? ` Se não chegar lá, vai para a prova final com ${n1(Math.max(0, e.needExame))} ${rest}.` : '') };
+    if (e.sit === 'exame') return e.media === null
+      ? { cls: 'neg', txt: `Passar direto já não é possível. Vai para a prova final se tirar ${n1(Math.max(0, e.needExame))} ${rest}.` }
+      : { cls: 'neg', txt: `Média ${n1(e.media)}: você vai fazer a prova final e precisa de ${e.exameNeed > R.max ? 'mais que a nota máxima (não dá para passar)' : n1(Math.max(0, e.exameNeed)) + ' nela'} (média final mínima ${n1(R.exameMedia)}).` };
+    if (e.sit === 'rep') return { cls: 'neg', txt: e.media === null ? `Reprovação certa: mesmo com ${n1(R.max)} ${rest}, a média não chega ao mínimo${R.exame ? ' nem à prova final' : ''}.` : `Reprovado: média ${n1(e.media)}, abaixo de ${n1(R.exame ? R.exameMin : R.mediaAprov)}${R.exame ? ' (mínimo para a prova final)' : ''}.` };
+    return null;
+  }
+  const semNota = () => DB.estudo.itens.filter(i => i.tipo === 'prova' && i.data <= hoje() && typeof i.nota !== 'number').sort((a, b) => a.data.localeCompare(b.data));
 
   function parar() {
     const t = Cron.fim('estudo'); if (!t) return;
@@ -68,7 +92,7 @@ const Estudos = (() => {
   /* ---------- listas reaproveitadas ---------- */
   function linhaItem(i, extra = '') {
     const m = materia(i.materiaId), atras = !i.feito && i.data < hoje(), p = progresso(i), temNota = typeof i.nota === 'number';
-    return `<div class="row${i.feito ? ' done' : ''}" data-i="${i.id}"><button class="ck${i.feito ? ' on' : ''}" data-ck="${i.id}" aria-label="Concluir"></button><div class="t"><b>${esc(i.titulo)}</b><small>${TIPOS[i.tipo] || ''}${m ? ' · ' + esc(m.nome) : ''} · <span class="${atras ? 'neg' : ''}">${fmtData(i.data)}${i.feito ? '' : ' · ' + quando(i.data)}</span></small>${p.n && !i.feito ? `<small>${p.est} de ${p.n} tópicos estudados</small>${extra}<div class="bar"><i style="width:${p.pct}%"></i></div>` : ''}</div>${temNota ? `<span class="n">${numStr(i.nota)}</span>` : ''}</div>`;
+    return `<div class="row${i.feito ? ' done' : ''}" data-i="${i.id}"><button class="ck${i.feito ? ' on' : ''}" data-ck="${i.id}" aria-label="Concluir"></button><div class="t"><b>${esc(i.titulo)}</b><small>${TIPOS[i.tipo] || ''}${m ? ' · ' + esc(m.nome) : ''} · <span class="${atras ? 'neg' : ''}">${fmtData(i.data)}${i.feito ? '' : ' · ' + quando(i.data)}</span></small>${p.n && !i.feito ? `<small>${p.est} de ${p.n} tópicos estudados</small>${extra}<div class="bar"><i style="width:${p.pct}%"></i></div>` : ''}</div>${temNota ? `<span class="n">${numStr(i.nota)}</span>` : (i.tipo === 'prova' && i.data <= hoje()) ? `<button class="btn" data-nota="${i.id}" style="padding:6px 12px">Lançar nota</button>` : ''}</div>`;
   }
   function linhaTop(t) {
     const dev = devida(t), min = minTopico(t.id);
@@ -85,8 +109,10 @@ const Estudos = (() => {
     $$('[data-rev]', el).forEach(b => b.onclick = e => { e.stopPropagation(); revisarDlg(topico(b.dataset.rev)); });
     $$('[data-play]', el).forEach(b => b.onclick = e => { e.stopPropagation(); const t = topico(b.dataset.play); if (t) comecar(t.materiaId, t.id); });
     $$('[data-t]', el).forEach(r => r.onclick = () => { const t = topico(r.dataset.t); if (t) formTopico(t, t.materiaId); });
+    $$('[data-nota]', el).forEach(b => b.onclick = e => { e.stopPropagation(); formNota(DB.estudo.itens.find(x => x.id === b.dataset.nota)); });
     $$('[data-i]', el).forEach(r => r.onclick = e => {
       const i = DB.estudo.itens.find(x => x.id === r.dataset.i); if (!i) return;
+      if (e.target.closest('[data-nota]')) return;
       if (e.target.closest('[data-ck]')) { i.feito = !i.feito; commit(); } else formItem(i);
     });
   }
@@ -114,7 +140,7 @@ const Estudos = (() => {
         const ts = topsDe(m.id), dom = ts.filter(t => t.status === 'dominado').length, rv = ts.filter(devida).length;
         return `<div class="card" data-open="${m.id}" style="border-left:4px solid ${esc(m.cor)}"><h3><span>${esc(m.nome)}</span>${ativa ? '' : `<button class="btn" data-go="${m.id}" style="padding:6px 14px">Estudar</button>`}</h3>
           <small class="mu">${dur(w)}${meta ? ` de ${dur(meta)} na semana` : ' na semana'}</small>${meta ? `<div class="bar"><i style="width:${p}%;background:${esc(m.cor)}"></i></div>` : ''}
-          ${ts.length ? `<small class="mu" style="display:block;margin-top:6px">${ts.length} tópico${ts.length > 1 ? 's' : ''} · ${dom} dominado${dom === 1 ? '' : 's'}${rv ? ` · <b class="neg">${rv} para revisar</b>` : ''}</small>` : ''}</div>`;
+          ${(() => { const x = textoSit(m); return x ? `<small class="${x.cls}" style="display:block;margin-top:6px">${esc(x.txt)}</small>` : ''; })()}${ts.length ? `<small class="mu" style="display:block;margin-top:6px">${ts.length} tópico${ts.length > 1 ? 's' : ''} · ${dom} dominado${dom === 1 ? '' : 's'}${rv ? ` · <b class="neg">${rv} para revisar</b>` : ''}</small>` : ''}</div>`;
       }).join('') : '<div class="empty">Cadastre suas matérias ou cursos.<br>Toque em + para começar.</div>');
     const st = $('#stop', el); if (st) st.onclick = parar;
     $$('[data-go]', el).forEach(b => b.onclick = e => { e.stopPropagation(); comecar(b.dataset.go); });
@@ -130,7 +156,7 @@ const Estudos = (() => {
     const mi = infoMedia(m);
     let media = '';
     if (mi.av.length || mi.alvo) {
-      const l = [];
+      const l = [], ts_ = textoSit(m); if (ts_) l.push(`<b class="${ts_.cls}">${esc(ts_.txt)}</b>`);
       if (mi.atual !== null) l.push(`Média atual: <b>${n1(mi.atual)}</b> de ${numStr(mi.max)}${mi.alvo ? ` · meta ${n1(mi.alvo)}` : ''}`);
       if (mi.need !== null) {
         if (mi.need <= 0) l.push('<span class="pos">Meta garantida: o que falta não muda o resultado.</span>');
@@ -160,7 +186,7 @@ const Estudos = (() => {
     const provas = DB.estudo.itens.filter(i => !i.feito && i.tipo === 'prova' && i.data >= hj && diasEntre(hj, i.data) <= 21).sort((a, b) => a.data.localeCompare(b.data));
     const prox = topL().filter(t => t.status === 'estudando' && t.proxRev > hj && diasEntre(hj, t.proxRev) <= 7).sort((a, b) => a.proxRev.localeCompare(b.proxRev));
     const sec = (tit, l, fn) => l.length ? `<div class="dia">${tit}</div><div class="card" style="padding:2px 14px">${l.map(fn).join('')}</div>` : '';
-    const html = sec('Revisões para fazer', dev, linhaRev) + sec('Atrasados', atr, i => linhaItem(i)) + sec('Provas nas próximas 3 semanas', provas, i => {
+    const html = sec('Aguardando a nota', semNota(), i => linhaItem(i)) + sec('Revisões para fazer', dev, linhaRev) + sec('Atrasados', atr, i => linhaItem(i)) + sec('Provas nas próximas 3 semanas', provas, i => {
       const p = progresso(i), falta = p.faltam.slice(0, 3).map(t => t.nome).join(', ');
       return linhaItem(i, falta ? `<small>Faltam: ${esc(falta)}${p.faltam.length > 3 ? '…' : ''}</small>` : '');
     }) + sec('Revisões nos próximos 7 dias', prox, linhaRev);
@@ -260,11 +286,24 @@ const Estudos = (() => {
   /* ---------- formulários ---------- */
   function formMateria(m) {
     const novo = !m, ini = m || { nome: '', cor: CORES[DB.estudo.materias.length % CORES.length], metaHoras: '', mediaAlvo: 7, notaMax: 10 };
-    const s = sheet(novo ? 'Nova matéria' : 'Editar matéria', `${F('Nome', inp('nome', ini.nome, 'placeholder="Ex.: Cálculo II"'))}
+    const cursosL = DB.estudo.cursos || [], discL = (DB.estudo.disciplinas || []).filter(d => !d.materiaId || !materia(d.materiaId));
+    const grupos = cursosL.map(c => ({ c, l: discL.filter(d => d.cursoId === c.id).sort((a, b) => (a.periodo || 99) - (b.periodo || 99) || a.nome.localeCompare(b.nome, 'pt-BR')) })).filter(g => g.l.length);
+    const puxar = !novo ? '' : (grupos.length ? F('Puxar do seu curso', `<select name="puxar"><option value="">Escolher uma disciplina…</option>${grupos.map(g => `<optgroup label="${esc((g.c.curso || 'Curso') + ' · ' + g.c.nome)}">${g.l.map(d => `<option value="${d.id}">${esc(d.nome)}${d.periodo ? ' (' + d.periodo + 'º período)' : ''}</option>`).join('')}</optgroup>`).join('')}</select>`) + '<p class="hint" id="pxh">Lista as disciplinas cadastradas em Curso, com o curso e a instituição de cada uma. Ao escolher, a matéria já vem com as regras de nota da instituição.</p>'
+      : '<p class="hint">Para puxar disciplinas, cadastre sua instituição, o curso e as disciplinas na aba Curso. <a href="#" id="pxc" style="color:var(--cor)">Abrir Curso</a></p>');
+    const s = sheet(novo ? 'Nova matéria' : 'Editar matéria', `${puxar}${F('Nome', inp('nome', ini.nome, 'placeholder="Ex.: Cálculo II"'))}
       <div class="g2">${F('Meta (horas por semana)', inp('metaHoras', ini.metaHoras ? numStr(ini.metaHoras) : '', 'inputmode="decimal"'))}${F('Cor', `<input type="color" name="cor" value="${esc(ini.cor)}" style="padding:2px;height:44px">`)}</div>
       <div class="g2">${F('Média para passar', inp('mediaAlvo', ini.mediaAlvo ? numStr(ini.mediaAlvo) : '', 'inputmode="decimal"'))}${F('Nota máxima', inp('notaMax', numStr(ini.notaMax || 10), 'inputmode="decimal"'))}</div>
-      <p class="hint">A média e o simulador de notas usam estes dois valores e o peso de cada prova.</p>
+      <div class="g2">${F('Média mínima para a prova final', inp('exameMin', ini.exameMin ? numStr(ini.exameMin) : '', 'inputmode="decimal" placeholder="sem prova final"'))}${F('Média final após a prova final', inp('exameMedia', ini.exameMedia ? numStr(ini.exameMedia) : '', 'inputmode="decimal" placeholder="5"'))}</div>
+      <p class="hint">A média e o simulador usam estes valores e o peso de cada prova. Se a matéria veio de uma disciplina do Curso, valem as regras da instituição.</p>
       <div class="acts">${novo ? '' : '<button class="btn bad" data-del>Excluir</button>'}<button class="btn" data-ok>Salvar</button></div>`);
+    const pxs = s.$('[name=puxar]');
+    if (pxs) pxs.onchange = () => {
+      const dd = (DB.estudo.disciplinas || []).find(x => x.id === pxs.value), set = (n, v) => { s.$('[name=' + n + ']').value = v; };
+      if (!dd) return; const c = cursosL.find(x => x.id === dd.cursoId), R = Curso.reg(c);
+      set('nome', dd.nome); set('mediaAlvo', numStr(R.mediaAprov)); set('notaMax', numStr(R.max)); set('exameMin', R.exame ? numStr(R.exameMin) : ''); set('exameMedia', R.exame ? numStr(R.exameMedia) : '');
+      s.$('#pxh').textContent = `Instituição: ${c ? c.nome : '—'} · Curso: ${c && c.curso ? c.curso : '—'}${dd.periodo ? ' · ' + dd.periodo + 'º período' : ''}${dd.creditos ? ' · ' + dd.creditos + ' créditos' : ''}.`;
+    };
+    const pxc = s.$('#pxc'); if (pxc) pxc.onclick = ev => { ev.preventDefault(); s.fechar(); S.seg = 'curso'; S.mat = null; refresh(); };
     if (!novo) s.$('[data-del]').onclick = async () => {
       if (!(await confirmar('Excluir esta matéria, seus tópicos, sessões, aulas e itens?'))) return;
       const bak = { m, ses: DB.estudo.sessoes.filter(x => x.materiaId === m.id), it: DB.estudo.itens.filter(x => x.materiaId === m.id), au: aulasL().filter(x => x.materiaId === m.id), tp: topsDe(m.id) };
@@ -281,8 +320,11 @@ const Estudos = (() => {
       if (isNaN(alvo) || alvo < 0) return toast('Média para passar inválida.');
       if (isNaN(max) || max <= 0) return toast('Nota máxima inválida.');
       if (alvo > max) return toast('A média para passar não pode ser maior que a nota máxima.');
-      const d = { nome: v.nome.trim(), cor: v.cor, metaHoras: meta, mediaAlvo: alvo, notaMax: max };
-      if (novo) DB.estudo.materias.push({ id: uid('ma'), ...d }); else Object.assign(m, d);
+      const eMin = v.exameMin.trim() ? num(v.exameMin) : 0, eMed = v.exameMedia.trim() ? num(v.exameMedia) : 0;
+      if (isNaN(eMin) || eMin < 0 || isNaN(eMed) || eMed < 0) return toast('Média da prova final inválida.');
+      if (eMin && alvo && eMin >= alvo) return toast('A média para fazer a prova final deve ser menor que a média para passar.');
+      const d = { nome: v.nome.trim(), cor: v.cor, metaHoras: meta, mediaAlvo: alvo, notaMax: max, exameMin: eMin, exameMedia: eMed };
+      if (novo) { const nid = uid('ma'); DB.estudo.materias.push({ id: nid, ...d }); const dd = v.puxar && (DB.estudo.disciplinas || []).find(x => x.id === v.puxar); if (dd) dd.materiaId = nid; } else Object.assign(m, d);
       s.fechar(); commit();
     };
   }
@@ -328,6 +370,24 @@ const Estudos = (() => {
     };
   }
 
+  function formNota(i) {
+    if (!i) return;
+    const m = materia(i.materiaId), max = (m && m.notaMax) || 10;
+    const s = sheet('Nota · ' + i.titulo, `<p class="hint">${m ? esc(m.nome) + ' · ' : ''}prova de ${fmtData(i.data)}</p>
+      ${F(`Nota obtida (0 a ${numStr(max)})`, inp('nota', '', 'inputmode="decimal" placeholder="0,0"'))}
+      ${F('Peso desta prova na média', inp('peso', i.peso ? numStr(i.peso) : '1', 'inputmode="decimal"'))}
+      <div class="acts"><button class="btn" data-ok>Salvar nota</button></div>`);
+    s.$('[name=nota]').focus();
+    s.$('[data-ok]').onclick = async () => {
+      const v = vals(s.el), nota = num(v.nota), peso = v.peso.trim() ? num(v.peso) : 1;
+      if (!v.nota.trim() || isNaN(nota) || nota < 0) return toast('Informe a nota.');
+      if (nota > max) return toast(`A nota não pode passar de ${numStr(max)}.`);
+      if (isNaN(peso) || peso <= 0) return toast('O peso deve ser maior que zero para entrar na média.');
+      i.nota = nota; i.peso = peso; i.feito = true; s.fechar(); commit();
+      const t = m && textoSit(m), mi = m && infoMedia(m);
+      await dialog(`Nota ${numStr(nota)} lançada.` + (mi && mi.atual !== null ? ` Média até agora: ${n1(mi.atual)}.` : '') + (t ? ` ${t.txt}` : ''), ['OK']);
+    };
+  }
   function formItem(i) {
     if (!DB.estudo.materias.length) return toast('Cadastre uma matéria primeiro.');
     const novo = !i, ini = i || { titulo: '', tipo: 'prova', data: hoje(), materiaId: S.mat || DB.estudo.materias[0].id, peso: 1, nota: null, cobre: [] };
@@ -440,5 +500,5 @@ const Estudos = (() => {
     fab: () => S.mat ? () => formTopico(null, S.mat) : S.seg === 'curso' ? Curso.fab() : S.seg === 'materias' ? () => formMateria(null) : S.seg === 'aulas' ? () => formAula(null) : S.seg === 'itens' ? () => formItem(null) : S.seg === 'hist' ? () => formSessao(null) : null,
     fabLabel: () => S.mat ? 'Novos tópicos' : S.seg === 'curso' ? 'Nova disciplina' : S.seg === 'materias' ? 'Nova matéria' : S.seg === 'aulas' ? 'Nova aula' : S.seg === 'itens' ? 'Nova prova ou entrega' : 'Registrar sessão'
   });
-  return { S, minSemana, minHoje, proximos, comecar, parar, pend, progresso, revDevidas };
+  return { S, formNota, textoSit, minSemana, minHoje, proximos, comecar, parar, pend, progresso, revDevidas };
 })();
