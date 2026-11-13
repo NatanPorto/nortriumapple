@@ -50,13 +50,6 @@ const Saude = (() => {
     };
   }
 
-  function criarLembreteAgua() {
-    DB.avisos = DB.avisos || [];
-    if (DB.avisos.some(a => a.titulo === 'Beber água')) { toast('Já existe um aviso "Beber água". Edite em Ajustes > Meus avisos.'); return Notif.avisosTela(); }
-    DB.avisos.push({ id: uid('av'), titulo: 'Beber água', texto: 'Registre no app', data: hoje(), hora: '08:00', intervalo: 2, horaFim: '20:00', repete: 'diario', cada: 1, dias: [], ate: '', ativo: true });
-    Store.salvar(); toast('Lembrete criado: a cada 2 h, das 8h às 20h. Ajuste em Ajustes > Meus avisos.');
-  }
-
   function rAgua(el) {
     const hj = hoje(), a = ag(), tot = mlDia(hj), meta = a.meta || 0, per = S.per;
     const regs = a.reg.filter(r => r.data === hj).sort((x, y) => y.hora.localeCompare(x.hora));
@@ -68,10 +61,10 @@ const Saude = (() => {
       ${regs.length ? `<div class="dia">Registros de hoje</div><div class="card" style="padding:2px 14px">${regs.map(r => `<div class="row" data-r="${r.id}"><div class="t"><b>${fmtMl(r.ml)}</b><small>${esc(r.hora)}</small></div></div>`).join('')}</div>` : ''}
       <div class="dia">Histórico</div>
       <div class="seg sm">${[[7, '7 dias'], [30, '30 dias']].map(([v, l]) => `<button data-p="${v}" class="${per === v ? 'on' : ''}">${l}</button>`).join('')}</div>
-      <div class="card"><div class="gr">${vals_.map(v => `<div><i style="height:${Math.round(v / pico * 100)}%"></i></div>`).join('')}</div>
-        <div class="gl">${dias.map((d, k) => `<span>${per === 7 ? DIAS[pd(d).getDay()] : (k % 5 === 0 ? String(+d.slice(8)) : '')}</span>`).join('')}</div>
+      <div class="card">${Graf.barras(vals_, dias.map((d, k) => per === 7 ? DIAS[pd(d).getDay()] : (k % 5 === 0 ? String(+d.slice(8)) : '')), { meta, tips: dias.map((d, k) => fmtDiaCurto(d) + ': ' + fmtMl(vals_[k])) })}
         <small class="mu" style="display:block;margin-top:8px">${comReg.length ? `Média nos dias com registro: ${fmtMl(media)}` : 'Nenhum registro neste período.'}${meta && comReg.length ? ` · meta atingida em ${naMeta} de ${per} dias` : ''}</small></div>
       <div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn sec" id="ag-m">Meta e botões</button></div>`;
+    Graf.ligar(el);
     $$('[data-ag]', el).forEach(b => b.onclick = () => addAgua(+b.dataset.ag));
     $$('[data-r]', el).forEach(r => r.onclick = () => formAguaReg(ag().reg.find(x => x.id === r.dataset.r)));
     $$('[data-p]', el).forEach(b => b.onclick = () => { S.per = +b.dataset.p; refresh(); });
@@ -115,11 +108,25 @@ const Saude = (() => {
   function addComuns() {
     let n = 0;
     COMUNS.forEach(([nome, base, kcal, prot, carb, gord, fib, med]) => {
-      if (dt().alimentos.some(f => nk(f.nome) === nk(nome))) return;
+      if (dt().alimentos.some(f => nk(f.nome) === nk(nome) || (f.kcal === kcal && f.prot === prot && f.carb === carb && f.gord === gord))) return;   // já existe (inclusive vindo da TACO)
       dt().alimentos.push({ id: uid('al'), nome, marca: '', base, kcal, prot, carb, gord, fib, sod: 0, medidas: medidasDe(med), fav: false, fonte: 'Aproximado', usado: 0 }); n++;
     });
     return n;
   }
+  /* TACO 2ª edição (js/taco.js): cadastra os alimentos que ainda não existem; os "Aproximados" com os mesmos valores são só marcados como TACO */
+  function importarTaco() {
+    if (typeof TACO === 'undefined') return { n: 0, at: 0, ign: 0 };
+    const al = dt().alimentos, igual = (a, b) => Math.abs((Number(a) || 0) - b) < 0.06;
+    let n = 0, at = 0, ign = 0;
+    TACO.forEach(([id, nome, base, kcal, prot, carb, gord, fib, sod]) => {
+      if (al.some(f => f.taco === id || nk(f.nome) === nk(nome))) { ign++; return; }
+      const ap = al.find(f => f.fonte === 'Aproximado' && !f.taco && f.base === base && igual(f.kcal, kcal) && igual(f.prot, prot) && igual(f.carb, carb) && igual(f.gord, gord));
+      if (ap) { ap.fonte = 'TACO'; ap.taco = id; if (!ap.sod) ap.sod = sod; at++; return; }
+      al.push({ id: uid('al'), taco: id, nome, marca: '', base, kcal, prot, carb, gord, fib, sod, medidas: medidasDe(TACO_MEDIDAS[id]), fav: false, fonte: 'TACO', usado: 0 }); n++;
+    });
+    return { n, at, ign };
+  }
+  const msgTaco = x => x.n || x.at ? `TACO: ${x.n} alimento(s) cadastrado(s)${x.at ? ` · ${x.at} atualizado(s)` : ''}${x.ign ? ` · ${x.ign} já existia(m)` : ''}.` : 'Todos os alimentos da TACO já estão cadastrados.';
   function importarCsv(texto) {                       // nome;kcal;prot;carb;gord;fibra[;ml]  (valores por 100 g ou 100 ml)
     let n = 0, ign = 0;
     String(texto).replace(/^\ufeff/, '').split(/\r?\n/).forEach(l => {
@@ -196,7 +203,7 @@ const Saude = (() => {
     function desenha() {
       const al = dt().alimentos, k = nk(busca.value);
       let html = '';
-      if (!al.length) html = `<div class="empty">Você ainda não cadastrou alimentos.</div><div class="acts" style="flex-wrap:wrap"><button class="btn sec" data-novo>Cadastrar alimento</button><button class="btn sec" data-comuns>Adicionar alimentos comuns</button></div><p class="hint">Os alimentos comuns trazem valores aproximados. Confira com o rótulo ou com a tabela TACO.</p>`;
+      if (!al.length) html = `<div class="empty">Você ainda não cadastrou alimentos.</div><div class="acts" style="flex-wrap:wrap"><button class="btn sec" data-novo>Cadastrar alimento</button><button class="btn sec" data-taco>Importar tabela TACO</button><button class="btn sec" data-comuns>Adicionar alimentos comuns</button></div><p class="hint">A tabela TACO traz cerca de 490 alimentos brasileiros com valores por 100 g. Os alimentos comuns são aproximados; confira com o rótulo.</p>`;
       else if (k) { const l = al.filter(f => nk(f.nome + ' ' + (f.marca || '')).includes(k)).slice(0, 40); html = l.length ? `<div class="card" style="padding:2px 14px">${l.map(linha).join('')}</div>` : '<div class="empty">Nada encontrado.</div><div class="acts"><button class="btn sec" data-novo>Cadastrar alimento</button></div>'; }
       else {
         const fav = al.filter(f => f.fav), rec = al.filter(f => !f.fav && f.usado).sort((a, b) => b.usado - a.usado).slice(0, 10);
@@ -207,6 +214,7 @@ const Saude = (() => {
       la.innerHTML = html;
       $$('[data-f]', la).forEach(r => r.onclick = () => qtdSheet(dt().alimentos.find(f => f.id === r.dataset.f), aoEscolher));
       const nv = $('[data-novo]', la); if (nv) nv.onclick = () => formAlimento(null, f => qtdSheet(f, aoEscolher));
+      const tc = $('[data-taco]', la); if (tc) tc.onclick = () => { const x = importarTaco(); Store.salvar(); toast(msgTaco(x)); desenha(); };
       const cm = $('[data-comuns]', la); if (cm) cm.onclick = () => { const n = addComuns(); Store.salvar(); toast(n + ' alimentos adicionados (valores aproximados).'); desenha(); };
     }
     busca.oninput = desenha; desenha();
@@ -342,12 +350,13 @@ const Saude = (() => {
     const al = [...dt().alimentos].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), k = nk(S.busca || '');
     const l = k ? al.filter(f => nk(f.nome + ' ' + (f.marca || '')).includes(k)) : al;
     el.innerHTML = `<input type="search" id="al-b" placeholder="Buscar alimento" value="${esc(S.busca || '')}" aria-label="Buscar alimento" style="margin-bottom:10px">
-      ${l.length ? `<div class="card" style="padding:2px 14px">${l.slice(0, 150).map(f => `<div class="row"><button class="btn sec" data-fv="${f.id}" aria-label="${f.fav ? 'Remover dos favoritos' : 'Favoritar'}" style="padding:4px 10px;${f.fav ? 'color:var(--cor);border-color:var(--cor)' : ''}">${f.fav ? '★' : '☆'}</button><div class="t" data-f="${f.id}"><b>${esc(f.nome)}</b><small>${esc([f.marca, Math.round(f.kcal) + ' kcal/100 ' + f.base, f.fonte].filter(Boolean).join(' · '))}</small></div></div>`).join('')}</div>` : `<div class="empty">${al.length ? 'Nada encontrado.' : 'Nenhum alimento cadastrado.<br>Toque em + ou adicione os alimentos comuns.'}</div>`}
-      <div class="acts" style="justify-content:flex-start;flex-wrap:wrap;margin-top:12px"><button class="btn sec" id="al-c">Adicionar alimentos comuns</button><button class="btn sec" id="al-i">Importar CSV</button></div>
-      <p class="hint">Os alimentos comuns têm valores aproximados; confira com o rótulo ou com a tabela TACO/TBCA. Para importar uma tabela, use um CSV com colunas: nome;kcal;proteínas;carboidratos;gorduras;fibras (valores por 100 g).</p>`;
+      ${l.length ? `<div class="card" style="padding:2px 14px">${l.slice(0, 600).map(f => `<div class="row"><button class="btn sec" data-fv="${f.id}" aria-label="${f.fav ? 'Remover dos favoritos' : 'Favoritar'}" style="padding:4px 10px;${f.fav ? 'color:var(--cor);border-color:var(--cor)' : ''}">${f.fav ? '★' : '☆'}</button><div class="t" data-f="${f.id}"><b>${esc(f.nome)}</b><small>${esc([f.marca, Math.round(f.kcal) + ' kcal/100 ' + f.base, f.fonte].filter(Boolean).join(' · '))}</small></div></div>`).join('')}</div>` : `<div class="empty">${al.length ? 'Nada encontrado.' : 'Nenhum alimento cadastrado.<br>Toque em + ou adicione os alimentos comuns.'}</div>`}
+      <div class="acts" style="justify-content:flex-start;flex-wrap:wrap;margin-top:12px"><button class="btn sec" id="al-t">Importar tabela TACO</button><button class="btn sec" id="al-c">Adicionar alimentos comuns</button><button class="btn sec" id="al-i">Importar CSV</button></div>
+      <p class="hint">A TACO (2ª edição, NEPA/UNICAMP) traz ~490 alimentos brasileiros por 100 g. Os alimentos comuns têm valores aproximados; confira com o rótulo. Para importar uma tabela, use um CSV com colunas: nome;kcal;proteínas;carboidratos;gorduras;fibras (valores por 100 g).</p>`;
     const b = $('#al-b', el); b.oninput = () => { S.busca = b.value; const p = b.selectionStart; refresh(); const n = $('#al-b'); if (n) { n.focus(); n.setSelectionRange(p, p); } };
     $$('[data-f]', el).forEach(r => r.onclick = () => formAlimento(dt().alimentos.find(f => f.id === r.dataset.f)));
     $$('[data-fv]', el).forEach(r => r.onclick = () => { const f = dt().alimentos.find(x => x.id === r.dataset.fv); f.fav = !f.fav; commit(); });
+    $('#al-t', el).onclick = () => { const x = importarTaco(); commit(); toast(msgTaco(x)); };
     $('#al-c', el).onclick = () => { const n = addComuns(); commit(); toast(n ? n + ' alimentos adicionados (valores aproximados).' : 'Os alimentos comuns já estão cadastrados.'); };
     $('#al-i', el).onclick = escolherCsv;
   }
@@ -434,15 +443,166 @@ const Saude = (() => {
     const gs = $('#cp-g', el); if (gs) gs.onclick = formGasto;
   }
 
+
+  /* =========================== IMC, GASTO E DÉFICIT ===========================
+     TMB pela equação de Mifflin-St Jeor; gasto total = TMB × nível de atividade;
+     1 kg de peso ≈ 7.700 kcal. São estimativas, não prescrição. */
+  const NIVEIS = [[1.2, 'Sedentário (quase sem exercício)'], [1.375, 'Leve (1–3 treinos/semana)'], [1.55, 'Moderado (3–5 treinos/semana)'], [1.725, 'Intenso (6–7 treinos/semana)'], [1.9, 'Muito intenso (treino pesado/trabalho físico)']];
+  const RITMOS = [[0, 'Manter'], [0.25, '0,25 kg/sem'], [0.5, '0,5 kg/sem'], [0.75, '0,75 kg/sem'], [1, '1 kg/sem']];
+  const KCAL_KG = 7700;
+  const idadeDe = nasc => { if (!dataOk(nasc)) return 0; const n = pd(nasc), h = pd(hoje()); let a = h.getFullYear() - n.getFullYear(); if (h.getMonth() < n.getMonth() || (h.getMonth() === n.getMonth() && h.getDate() < n.getDate())) a--; return a; };
+  const pesoAtual = () => [...DB.treino.medidas].filter(m => m.peso).sort((a, b) => b.data.localeCompare(a.data))[0] || null;
+  const classeImc = v => v < 18.5 ? 'Abaixo do peso' : v < 25 ? 'Peso normal' : v < 30 ? 'Sobrepeso' : v < 35 ? 'Obesidade grau I' : v < 40 ? 'Obesidade grau II' : 'Obesidade grau III';
+  function imcInfo() {
+    const pe = pesoAtual(), h = dt().perfil.altura; if (!pe || !(h > 0)) return null;
+    const m = h / 100, v = pe.peso / (m * m);
+    return { v, classe: classeImc(v), peso: pe.peso, data: pe.data, min: 18.5 * m * m, max: 24.9 * m * m };
+  }
+  const imcTxt = () => { const i = imcInfo(); return i ? `IMC ${n1(i.v)} · ${i.classe}` : ''; };
+  function energia() {
+    const p = dt().perfil, pe = pesoAtual(), idade = idadeDe(p.nasc);
+    if (!pe || !(p.altura > 0) || !idade || !p.sexo) return null;
+    const tmb = 10 * pe.peso + 6.25 * p.altura - 5 * idade + (p.sexo === 'M' ? 5 : -161);
+    return { tmb, get: tmb * p.nivel, idade, peso: pe.peso };
+  }
+  function planoDeficit(e) {
+    const p = dt().perfil, ritmo = Number(p.ritmo) || 0, def = ritmo * KCAL_KG / 7, piso = p.sexo === 'M' ? 1500 : 1200;
+    const bruta = e.get - def, meta = Math.max(bruta, piso);
+    return { ritmo, def, bruta, meta, piso, abaixoPiso: bruta < piso, defReal: e.get - meta };
+  }
+  function balanco7() {   // média dos últimos 7 dias com refeições registradas (dias incompletos subestimam o consumo)
+    const e = energia(); if (!e) return null;
+    const dias = Array.from({ length: 7 }, (_, k) => addDias(hoje(), -k)).map(d => ({ d, t: somaItens(refDia(d).flatMap(r => r.itens)) })).filter(x => x.t.kcal > 0);
+    if (!dias.length) return null;
+    const med = dias.reduce((t, x) => t + x.t.kcal, 0) / dias.length;
+    return { dias: dias.length, med, def: e.get - med, kgSem: (e.get - med) * 7 / KCAL_KG };
+  }
+
+  function formPerfil() {
+    const p = dt().perfil, pe = pesoAtual();
+    const s = sheet('Meu perfil', `<div class="g2">${F('Sexo', sel('sexo', [['', 'Selecione'], ['F', 'Feminino'], ['M', 'Masculino']], p.sexo))}${F('Nascimento', inp('nasc', p.nasc, 'type="date"'))}</div>
+      <div class="g2">${F('Altura (cm)', inp('altura', numStr(p.altura || ''), 'inputmode="decimal" placeholder="Ex.: 170"'))}${F('Peso desejado (kg)', inp('pesoMeta', numStr(p.pesoMeta || ''), 'inputmode="decimal" placeholder="opcional"'))}</div>
+      ${F('Nível de atividade', sel('nivel', NIVEIS, p.nivel))}
+      <p class="hint">${pe ? `Peso atual usado nos cálculos: ${numStr(pe.peso)} kg (último registro em Treino &gt; Corpo).` : 'O peso vem dos registros em Treino &gt; Corpo. Registre seu peso para calcular.'} A equação de Mifflin-St Jeor é uma estimativa para adultos; use como referência, não como prescrição.</p>
+      <div class="acts"><button class="btn sec" data-peso>Registrar peso</button><button class="btn" data-ok>Salvar</button></div>`);
+    s.$('[data-peso]').onclick = () => { s.fechar(); Treinos.formMedida(null); };
+    s.$('[data-ok]').onclick = () => {
+      const v = vals(s.el), alt = num(v.altura), pm = v.pesoMeta.trim() ? num(v.pesoMeta) : 0;
+      if (v.sexo !== 'F' && v.sexo !== 'M') return toast('Selecione o sexo.');
+      if (!dataOk(v.nasc) || idadeDe(v.nasc) < 1 || idadeDe(v.nasc) > 110) return toast('Informe uma data de nascimento válida.');
+      if (!(alt >= 100 && alt <= 250)) return toast('Altura entre 100 e 250 cm.');
+      if (isNaN(pm) || pm < 0 || (pm && (pm < 25 || pm > 400))) return toast('Peso desejado inválido.');
+      Object.assign(p, { sexo: v.sexo, nasc: v.nasc, altura: r1(alt), pesoMeta: pm ? r1(pm) : 0, nivel: Number(v.nivel) || 1.375 });
+      s.fechar(); commit();
+    };
+  }
+
+  function rDeficit(el) {
+    const p = dt().perfil, pe = pesoAtual(), im = imcInfo(), e = energia();
+    const alerta = t => `<div class="alerta" role="alert">${t}</div>`, nota = t => `<p class="nota">${t}</p>`;
+    const dl = (rot, v) => `<div class="dl"><span>${rot}</span><b>${v}</b></div>`;
+    if (!e || !im) {
+      const temPerfil = !!p.sexo && dataOk(p.nasc) && p.altura > 0;
+      el.innerHTML = `<div class="card dfc"><b style="font-size:16px">IMC e déficit calórico</b>
+        <p class="mu sm" style="margin:8px 0 0">Duas coisas para calcular seu IMC, seu gasto diário e uma meta de calorias:</p>
+        <ul class="passos"><li class="${temPerfil ? 'ok' : ''}"><i>${temPerfil ? '✓' : '1'}</i>Perfil: sexo, nascimento, altura e atividade</li><li class="${pe ? 'ok' : ''}"><i>${pe ? '✓' : '2'}</i>Peso atual${pe ? ': ' + numStr(pe.peso) + ' kg' : ' (Treino > Corpo)'}</li></ul>
+        <div class="acts" style="flex-direction:column-reverse;align-items:stretch">${pe ? '' : '<button class="btn sec" id="df-w">Registrar peso</button>'}<button class="btn" id="df-p">${temPerfil ? 'Editar perfil' : 'Preencher perfil'}</button></div></div>`;
+      $('#df-p', el).onclick = formPerfil; const w = $('#df-w', el); if (w) w.onclick = () => Treinos.formMedida(null);
+      return;
+    }
+    const menor = e.idade < 18, abaixo = im.v < 18.5, pl = planoDeficit(e), bal = balanco7(), metaAtual = Number(dt().metas.kcal) || 0, aplicada = metaAtual === Math.round(pl.meta);
+    const pos = Math.max(0, Math.min(100, (im.v - 15) / 25 * 100));
+    const faltam = p.pesoMeta > 0 && im.peso > p.pesoMeta ? im.peso - p.pesoMeta : 0, sem = pl.ritmo > 0 && faltam ? Math.ceil(faltam / pl.ritmo) : 0;
+    const imcMeta = p.pesoMeta > 0 ? p.pesoMeta / Math.pow(p.altura / 100, 2) : 0;
+    const semDeficit = menor || abaixo;
+    el.innerHTML = `<div class="card dfc"><small class="mu">Índice de massa corporal</small>
+        <div class="big">${n1(im.v)}<span class="mu" style="font-size:16px;font-weight:400"> · ${im.classe}</span></div>
+        <div class="imc" role="img" aria-label="Escala de IMC: seu valor é ${n1(im.v)}, ${im.classe}"><i style="width:14%"></i><i class="ok" style="width:26%"></i><i style="width:20%"></i><i style="width:20%"></i><i style="width:20%"></i><b style="left:${pos}%"></b></div>
+        <div class="imcl"><span>15</span><span>18,5</span><span>25</span><span>30</span><span>35</span><span>40</span></div>
+        ${nota(`Peso normal para ${numStr(p.altura)} cm: ${n1(im.min)} a ${n1(im.max)} kg. Seu último peso: ${numStr(im.peso)} kg (${fmtData(im.data)}).`)}
+        ${menor ? alerta('Abaixo de 18 anos o IMC é avaliado por curvas de idade e sexo. Procure um profissional.') : ''}
+        ${nota('O IMC não separa massa magra de gordura; em quem treina muito pode exagerar o excesso de peso. Cintura e % de gordura completam o quadro.')}</div>
+      <div class="card dfc"><small class="mu">Gasto diário estimado · ${e.idade} anos</small>
+        <div class="big">${Math.round(e.get)}<span class="mu" style="font-size:16px;font-weight:400"> kcal/dia</span></div>
+        ${nota(`Metabolismo basal ${Math.round(e.tmb)} kcal × fator de atividade ${numStr(p.nivel)}.`)}</div>
+      <div class="card dfc"><b style="font-size:16px">Déficit calórico</b>
+        <div class="ritmo" role="group" aria-label="Ritmo de perda de peso">${RITMOS.map(([v, l]) => `<button data-r="${v}" class="${pl.ritmo === v ? 'on' : ''}" aria-pressed="${pl.ritmo === v}">${l}</button>`).join('')}</div>
+        ${semDeficit ? alerta(`${abaixo ? 'Seu IMC está abaixo de 18,5: déficit calórico não é indicado.' : 'Para menores de 18 anos, déficit calórico só com acompanhamento profissional.'} Procure um profissional de saúde.`) : `
+        ${dl('Déficit diário', Math.round(pl.defReal) + ' kcal')}${dl('Meta de calorias', Math.round(pl.meta) + ' kcal')}
+        ${pl.ritmo ? nota(`≈ ${n1(pl.defReal * 7 / KCAL_KG)} kg por semana (${n1(pl.defReal * 30 / KCAL_KG)} kg por mês), com 7.700 kcal por kg.`) : ''}
+        ${pl.abaixoPiso ? alerta(`Esse ritmo levaria a ${Math.round(pl.bruta)} kcal. Por segurança a meta foi limitada a ${pl.piso} kcal, o mínimo usado sem acompanhamento. Escolha um ritmo menor ou procure um nutricionista.`) : ''}
+        ${pl.ritmo * KCAL_KG / 7 > e.get * 0.25 ? alerta('Esse déficit passa de 25% do seu gasto: difícil de sustentar e pode custar massa magra.') : ''}
+        ${faltam && sem ? nota(`Faltam ${n1(faltam)} kg para ${numStr(p.pesoMeta)} kg: cerca de ${sem} semana(s), até ${fmtData(addDias(hoje(), sem * 7))}. O gasto cai conforme o peso baixa, então o prazo real tende a ser maior.`) : ''}
+        ${imcMeta && imcMeta < 18.5 ? alerta(`Um peso de ${numStr(p.pesoMeta)} kg daria IMC ${n1(imcMeta)}, abaixo da faixa normal. Reveja o peso desejado.`) : ''}
+        <div class="acts" style="margin-top:16px"><button class="btn block" id="df-a"${aplicada ? ' disabled' : ''}>${aplicada ? '✓ Meta aplicada no Diário' : 'Usar como meta diária'}</button></div>`}</div>
+      ${bal ? `<div class="card dfc"><small class="mu">Balanço real · média de ${bal.dias} dia(s) com registro (últimos 7)</small>
+        <div class="big">${bal.def >= 0 ? '−' : '+'}${Math.abs(Math.round(bal.def))}<span class="mu" style="font-size:16px;font-weight:400"> kcal/dia</span></div>
+        ${nota(`Registrado: ${Math.round(bal.med)} kcal em média, para um gasto de ${Math.round(e.get)}. ${bal.def > 0 ? `No ritmo atual, ≈ ${n1(bal.kgSem)} kg a menos por semana.` : bal.def < 0 ? `No ritmo atual, ≈ ${n1(Math.abs(bal.kgSem))} kg a mais por semana.` : 'Praticamente manutenção.'} Dias com refeições faltando fazem o déficit parecer maior.`)}</div>` : ''}
+      <div class="acts dfc" style="flex-direction:column-reverse;align-items:stretch"><button class="btn sec" id="df-p">Editar perfil</button><button class="btn sec" id="df-w">Registrar peso</button></div>
+      ${nota('Estimativas para adultos saudáveis; não substituem médico ou nutricionista. Gestantes, lactantes e quem tem doenças ou histórico de transtorno alimentar não devem fazer déficit por conta própria.')}`;
+    $$('[data-r]', el).forEach(b => b.onclick = () => { p.ritmo = +b.dataset.r; commit(); });
+    $('#df-p', el).onclick = formPerfil; $('#df-w', el).onclick = () => Treinos.formMedida(null);
+    const a = $('#df-a', el); if (a) a.onclick = () => { dt().metas.kcal = Math.round(pl.meta); commit(); toast('Meta diária: ' + Math.round(pl.meta) + ' kcal'); };
+  }
+
+  /* ---------- resumo da aba Saúde (água, dieta, treino e peso num lugar só) ---------- */
+  function pesoMedia(de, ate) {                       // média dos pesos registrados entre duas datas (inclusive)
+    const l = DB.treino.medidas.filter(m => m.peso && m.data >= de && m.data <= ate);
+    return l.length ? l.reduce((t, m) => t + m.peso, 0) / l.length : null;
+  }
+  function rResumo(el) {
+    const hj = hoje(), a = ag(), totA = mlDia(hj), metaA = a.meta || 0;
+    const t = somaItens(refDia(hj).flatMap(r => r.itens)), m = dt().metas;
+    const fichas = Treinos.fichasDeHoje(), feitos = fichas.filter(f => Treinos.feitoHoje(f)).length, and = Treinos.andamento();
+    const treinouHj = DB.treino.sessoes.some(x => x.data === hj);
+    const tile = (area, cor, rot, pct, valor, sub) => `<button type="button" class="card rtile" data-sa="${area}" style="--cor:${cor}">${pct === null ? `<div class="rv">${valor}</div>` : Graf.anel(pct)}<b>${rot}</b><small class="mu">${sub}</small></button>`;
+    const tAgua = tile('agua', 'var(--c-agua)', 'Água', metaA ? Math.min(100, totA / metaA * 100) : null, fmtMl(totA), metaA ? `${fmtMl(totA)} de ${fmtMl(metaA)}` : 'sem meta definida');
+    const tDieta = tile('dieta', 'var(--c-dieta)', 'Dieta', m.kcal ? Math.min(100, t.kcal / m.kcal * 100) : null, Math.round(t.kcal) + ' kcal', m.kcal ? `${Math.round(t.kcal)} de ${m.kcal} kcal` : (t.kcal ? 'sem meta definida' : 'nada registrado'));
+    const tTreino = tile('treino', 'var(--c-treino)', 'Treino', fichas.length ? feitos / fichas.length * 100 : (treinouHj ? 100 : null), treinouHj ? 'Feito' : 'Livre', fichas.length ? `${feitos} de ${fichas.length} de hoje` : (treinouHj ? 'treino registrado' : 'nenhum previsto'));
+
+    const rapidos = a.rapidos.slice(0, 3).map(v => `<button type="button" class="btn" data-ag="${v}" style="padding:8px 14px;--cor:var(--c-agua)">+ ${fmtMl(v)}</button>`).join('');
+    const blocoTreino = and ? Treinos.faixaAndamento()
+      : fichas.length ? `<div class="card" style="padding:2px 14px">${fichas.map(f => { const ok = Treinos.feitoHoje(f); return `<div class="row"><div class="t"><b>${esc(f.nome)}</b><small>${ok ? 'Concluído hoje' : 'Previsto para hoje'}</small></div>${ok ? '<span class="n pos">✓</span>' : `<button type="button" class="btn sec" data-tr="${f.id}" style="padding:7px 14px">Iniciar</button>`}</div>`; }).join('')}</div>`
+      : `<div class="card mu sm">${treinouHj ? 'Treino de hoje já registrado.' : 'Nenhum treino previsto para hoje nas suas fichas.'}</div>`;
+
+    // peso: média de 7 dias x semana anterior (a média alisa a oscilação do dia a dia)
+    const mAt = pesoMedia(addDias(hj, -6), hj), mAnt = pesoMedia(addDias(hj, -13), addDias(hj, -7)), pe = pesoAtual();
+    const dif = mAt != null && mAnt != null ? mAt - mAnt : null;
+    const blocoPeso = pe ? `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><small class="mu">Peso</small><a href="#" data-peso>Ver evolução →</a></div>
+        <div class="big">${numStr(pe.peso)}<span class="mu" style="font-size:16px;font-weight:400"> kg · ${fmtData(pe.data)}</span></div>
+        ${dif != null ? `<small class="mu">Média de 7 dias ${numStr(r1(mAt))} kg, ${Math.abs(dif) < 0.05 ? 'igual à' : (dif > 0 ? '+' : '−') + numStr(r1(Math.abs(dif))) + ' kg em relação à'} semana anterior.</small>` : ''}
+        ${imcTxt() ? `<small class="mu" style="display:block">${imcTxt()}</small>` : ''}</div>`
+      : `<div class="card"><small class="mu">Peso</small><p class="mu sm" style="margin:6px 0 10px">Registre seu peso para acompanhar a evolução (a tendência usa a média da semana).</p><button type="button" class="btn sec" data-peso>Registrar peso</button></div>`;
+
+    // 7 dias: quem bateu a meta / registrou / treinou
+    const dias = Array.from({ length: 7 }, (_, k) => addDias(hj, -(6 - k)));
+    const linha = (rot, cor, f) => `<span class="sl">${rot}</span>${dias.map(d => `<i class="pt${f(d) ? ' on' : ''}" style="--cor:${cor}"></i>`).join('')}`;
+    const sem = `<div class="sem7"><span></span>${dias.map(d => `<small class="mu">${DIAS[pd(d).getDay()].slice(0, 1)}</small>`).join('')}
+      ${linha('Água', 'var(--c-agua)', d => metaA ? mlDia(d) >= metaA : mlDia(d) > 0)}
+      ${linha('Dieta', 'var(--c-dieta)', d => refDia(d).some(r => r.itens.length))}
+      ${linha('Treino', 'var(--c-treino)', d => DB.treino.sessoes.some(x => x.data === d))}</div>
+      <small class="mu" style="display:block;margin-top:10px">Água: ${metaA ? 'meta batida' : 'com registro'} · Dieta: com refeições registradas · Treino: com sessão feita.</small>`;
+
+    el.innerHTML = `<div class="rtiles">${tAgua}${tDieta}${tTreino}</div>
+      <div class="exb" style="margin-top:12px">${rapidos}<button type="button" class="btn sec" data-sa="dieta">Registrar refeição</button></div>
+      <div class="dia">Treino de hoje</div>${blocoTreino}
+      <div class="dia">Peso</div>${blocoPeso}
+      <div class="dia">Últimos 7 dias</div><div class="card">${sem}</div>`;
+    ligarCards(el);
+    Treinos.ligarFaixa(el);
+    $$('[data-tr]', el).forEach(b => b.onclick = () => Treinos.iniciar(DB.treino.fichas.find(f => f.id === b.dataset.tr)));
+    $$('[data-peso]', el).forEach(b => b.onclick = e => { e.preventDefault(); if (pe) { Treinos.S.area = 'treino'; Treinos.S.seg = 'corpo'; go('treino'); } else Treinos.formMedida(null); });
+  }
+
   /* ---------- roteamento da aba Saúde ---------- */
   function rDieta(el) {
-    el.innerHTML = segHtml([['diario', 'Diário'], ['alim', 'Alimentos'], ['rec', 'Receitas'], ['comp', 'Compras']], S.dsub) + '<div id="di-c"></div>';
+    el.innerHTML = segHtml([['diario', 'Diário'], ['alim', 'Alimentos'], ['rec', 'Receitas'], ['comp', 'Compras'], ['def', 'Déficit']], S.dsub) + '<div id="di-c"></div>';
     $$('.seg button', el).forEach(b => b.onclick = () => { S.dsub = b.dataset.s; refresh(); });
-    ({ diario: rDiario, alim: rAlimentos, rec: rReceitas, comp: rCompras })[S.dsub]($('#di-c', el));
+    ({ diario: rDiario, alim: rAlimentos, rec: rReceitas, comp: rCompras, def: rDeficit })[S.dsub]($('#di-c', el));
   }
-  const render = (el, area) => (area === 'agua' ? rAgua : rDieta)(el);
-  const fab = area => area === 'relogio' ? null : area === 'agua' ? formAguaValor : S.dsub === 'diario' ? () => escolherRefeicao(S.dia) : S.dsub === 'alim' ? () => formAlimento(null) : S.dsub === 'rec' ? () => formReceita(null) : formCompraItem;
-  const fabLabel = area => area === 'relogio' ? '' : area === 'agua' ? 'Registrar água' : S.dsub === 'diario' ? 'Adicionar alimento' : S.dsub === 'alim' ? 'Novo alimento' : S.dsub === 'rec' ? 'Nova receita' : 'Novo item';
+  const render = (el, area) => (area === 'resumo' ? rResumo : area === 'agua' ? rAgua : rDieta)(el);
+  const fab = area => area === 'resumo' ? null : area === 'agua' ? formAguaValor : S.dsub === 'diario' ? () => escolherRefeicao(S.dia) : S.dsub === 'alim' ? () => formAlimento(null) : S.dsub === 'rec' ? () => formReceita(null) : S.dsub === 'def' ? formPerfil : formCompraItem;
+  const fabLabel = area => area === 'resumo' ? '' : area === 'agua' ? 'Registrar água' : S.dsub === 'diario' ? 'Adicionar alimento' : S.dsub === 'alim' ? 'Novo alimento' : S.dsub === 'rec' ? 'Nova receita' : S.dsub === 'def' ? 'Editar perfil' : 'Novo item';
 
   /* ---------- cards da tela Hoje ---------- */
   const cardAgua = () => {
@@ -462,5 +622,5 @@ const Saude = (() => {
 
   const resumoDia = d => { const rs = refDia(d), t = somaItens(rs.flatMap(r => r.itens)); return { ...t, refeicoes: rs.length, metas: dt().metas }; };
   function abrirArea(area) { Treinos.S.area = area; if (area === 'dieta') S.dsub = 'diario'; S.dia = hoje(); go('treino'); }
-  return { S, render, fab, fabLabel, cardAgua, cardDieta, ligarCards, addAgua, importarCsv, addComuns, mlDia, fmtMl, resumoDia, abrirArea };
+  return { S, render, fab, fabLabel, imcTxt, imcInfo, energia, importarTaco, cardAgua, cardDieta, ligarCards, addAgua, importarCsv, addComuns, mlDia, fmtMl, resumoDia, abrirArea };
 })();

@@ -142,7 +142,6 @@ const Agenda = (() => {
 
   function form(ev) {
     const novo = !ev, ini = ev || { titulo: '', data: S.sel, hora: '', horaFim: '', local: '', repete: 'nao', cada: 1, dias: [], ate: '', nota: '', tipo: 'compromisso', avisos: null };
-    const modo0 = ini.avisos == null ? 'padrao' : (ini.avisos.length ? 'custom' : 'nenhum');
     const hab = ini.tipo === 'habito';
     const s = sheet(novo ? 'Novo na agenda' : 'Editar item', `
       <div class="tg" id="tipo"><button type="button" data-t="compromisso" class="${hab ? '' : 'on'}">Compromisso</button><button type="button" data-t="habito" class="${hab ? 'on' : ''}">Hábito</button></div>
@@ -153,21 +152,11 @@ const Agenda = (() => {
       <div class="g2">${F('Repetir', sel('repete', [['nao', 'Não repete'], ['diario', 'Todo dia'], ['uteis', 'Dias úteis (seg a sex)'], ['semanal', 'Toda semana'], ['mensal', 'Todo mês'], ['anual', 'Todo ano']], ini.repete))}<div id="cadaw">${F('A cada (dias)', inp('cada', ini.cada || 1, 'type="number" inputmode="numeric" min="1" max="99"'))}</div></div>
       <div class="f" id="semw"><span>Dias da semana</span><div class="dias">${[1, 2, 3, 4, 5, 6, 0].map(d => `<label><input type="checkbox" data-d="${d}" ${(ini.dias || []).includes(d) ? 'checked' : ''}><span>${DIAS[d]}</span></label>`).join('')}</div></div>
       <div id="ate">${F('Repetir até (opcional)', inp('ate', ini.ate || '', 'type="date"'))}</div>
-      ${F('Avisos', sel('avmodo', [['padrao', 'Padrão do app'], ['custom', 'Personalizado'], ['nenhum', 'Sem avisos']], modo0))}
-      <p class="hint" id="avdef"></p>
-      <div id="avs"></div>
       ${F('Anotações', `<textarea name="nota" style="min-height:70px">${esc(ini.nota || '')}</textarea>`)}
       <div class="acts">${novo ? '' : '<button class="btn bad" data-del>Excluir</button>'}<button class="btn" data-ok>Salvar</button></div>`);
 
     const rep = s.$('[name=repete]'), dt = s.$('[name=data]'), hr = s.$('[name=hora]');
     const comHora = () => !!hr.value;
-    const inicial = Array.isArray(ini.avisos) && ini.avisos.length ? ini.avisos : Notif.padraoPara(!!ini.hora, ini.repete !== 'nao');
-    const ed = Notif.editor(s.$('#avs'), inicial, { comHora: !!ini.hora });
-    const mostraAv = () => {
-      const m = s.$('[name=avmodo]').value, d = s.$('#avdef');
-      s.$('#avs').hidden = m !== 'custom'; d.hidden = m !== 'padrao';
-      if (m === 'padrao') d.textContent = 'Padrão: ' + Notif.resumo(Notif.padraoPara(comHora(), rep.value !== 'nao')) + '.';
-    };
     const mostra = () => {
       const r = rep.value;
       s.$('#ate').hidden = r === 'nao';
@@ -175,10 +164,8 @@ const Agenda = (() => {
       s.$('#semw').hidden = r !== 'semanal';
       s.$('#cadaw>.f>span').textContent = 'A cada (' + ({ diario: 'dias', semanal: 'semanas', mensal: 'meses' }[r] || 'dias') + ')';
       if (r === 'semanal' && !s.$$('[data-d]').some(c => c.checked) && dataOk(dt.value)) { const c = s.$(`[data-d="${pd(dt.value).getDay()}"]`); if (c) c.checked = true; }
-      mostraAv();
     };
-    rep.onchange = mostra; s.$('[name=avmodo]').onchange = mostraAv;
-    hr.oninput = () => { ed.setComHora(comHora()); mostraAv(); };
+    rep.onchange = mostra;
     s.$$('#tipo button').forEach(b => b.onclick = () => {
       s.$$('#tipo button').forEach(x => x.classList.toggle('on', x === b));
       if (b.dataset.t === 'habito' && novo && rep.value === 'nao') { rep.value = 'diario'; mostra(); }
@@ -197,11 +184,10 @@ const Agenda = (() => {
       if (v.ate && !dataOk(v.ate)) return toast('Data final inválida.');
       const rp = v.repete, dias = rp === 'semanal' ? s.$$('[data-d]').filter(c => c.checked).map(c => +c.dataset.d) : [];
       if (rp === 'semanal' && !dias.length) dias.push(pd(v.data).getDay());
-      const avisos = v.avmodo === 'padrao' ? null : v.avmodo === 'nenhum' ? [] : ed.get();
       const dados = {
         tipo: s.$('#tipo .on').dataset.t, titulo: v.titulo.trim(), data: v.data, hora: v.hora, horaFim: v.horaFim, local: v.local.trim(),
         repete: rp, cada: REP_COM_CADA.includes(rp) ? Math.max(1, Math.min(99, parseInt(v.cada, 10) || 1)) : 1, dias,
-        ate: rp === 'nao' ? '' : v.ate, nota: v.nota.trim(), avisos
+        ate: rp === 'nao' ? '' : v.ate, nota: v.nota.trim()
       };
       if (novo) DB.agenda.eventos.push({ id: uid('ev'), ...dados, feitos: {} }); else Object.assign(ev, dados);
       S.sel = v.data; S.mes = v.data.slice(0, 7); s.fechar(); commit();

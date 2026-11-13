@@ -333,3 +333,25 @@ nav.bot button{flex:0 0 22%;scroll-snap-align:center}
 .heat .hd{font-style:normal;font-size:11px;color:var(--mu);text-align:center}
 .heat .hc{aspect-ratio:1;border-radius:6px}
 .heat .hc.hj{outline:2px solid var(--c-hoje);outline-offset:1px}
+
+/* ---- Déficit / IMC (alvos de toque 48px, escala 8pt, no máx. 4 níveis de texto) ---- */
+.btn:active,.ritmo button:active{transform:scale(.98)}
+.btn:focus-visible,.seg button:focus-visible,.ritmo button:focus-visible{outline:2px solid var(--cor);outline-offset:2px}
+.dfc .btn{min-height:48px}
+.imc{position:relative;display:flex;gap:2px;height:8px;margin:24px 0 8px}
+.imc i{display:block;height:100%;background:var(--ln)}
+.imc i.ok{background:var(--ok)}
+.imc b{position:absolute;top:-6px;width:3px;height:20px;margin-left:-1px;background:var(--ink)}
+.imcl{display:flex;justify-content:space-between;font-size:12px;color:var(--mu);font-variant-numeric:tabular-nums}
+.ritmo{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;margin:16px 0}
+.ritmo button{min-height:48px;padding:8px;border:1px solid var(--ln);border-radius:var(--r2);background:var(--sf2);color:var(--ink);font-size:14px;font-weight:600}
+.ritmo button.on{background:var(--cor);border-color:var(--cor);color:var(--on)}
+.dl{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:8px 0;font-variant-numeric:tabular-nums}
+.dl+.dl{border-top:1px solid var(--ln2)}
+.dl b{font-size:16px}
+.nota{font-size:12px;line-height:1.5;color:var(--mu);margin:8px 0 0}
+.alerta{border-left:3px solid var(--bad);background:var(--sf2);padding:8px 16px;margin:16px 0 0;font-size:13px;line-height:1.5}
+.passos{list-style:none;margin:16px 0;padding:0}
+.passos li{display:flex;align-items:center;gap:16px;min-height:48px;font-size:14px}
+.passos i{width:24px;height:24px;flex:none;display:grid;place-items:center;border:1.5px solid var(--mu);border-radius:var(--r2);font-style:normal;font-size:13px;color:var(--mu)}
+.passos li.ok i{background:var(--ok);border-color:var(--ok);color:var(--on)}

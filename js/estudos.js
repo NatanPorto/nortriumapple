@@ -468,17 +468,13 @@ const Estudos = (() => {
   function formAula(a) {
     if (!DB.estudo.materias.length) return toast('Cadastre uma matéria primeiro.');
     const novo = !a, ini = a || { materiaId: DB.estudo.materias[0].id, dias: [], hora: '', horaFim: '', local: '', data: hoje(), ate: '', avisos: null };
-    const av = Notif.campoAvisos(ini.avisos, { comHora: () => !!s.$('[name=hora]').value, rep: () => true });
     const s = sheet(novo ? 'Nova aula' : 'Editar aula', `${F('Matéria', sel('materiaId', DB.estudo.materias.map(m => [m.id, m.nome]), ini.materiaId))}
       <div class="f"><span>Dias da semana</span><div class="dias">${[1, 2, 3, 4, 5, 6, 0].map(d => `<label><input type="checkbox" data-d="${d}" ${(ini.dias || []).includes(d) ? 'checked' : ''}><span>${DIAS[d]}</span></label>`).join('')}</div></div>
       <div class="g2">${F('Início', inp('hora', ini.hora, 'type="time"'))}${F('Fim', inp('horaFim', ini.horaFim, 'type="time"'))}</div>
       ${F('Local / sala (opcional)', inp('local', ini.local || ''))}
       <div class="g2">${F('Aulas começam em', inp('data', ini.data, 'type="date"'))}${F('Terminam em (opcional)', inp('ate', ini.ate || '', 'type="date"'))}</div>
-      ${av.html}
       <p class="hint">Toque na caixinha da aula, em “Hoje”, para marcar presença.</p>
       <div class="acts">${novo ? '' : '<button class="btn bad" data-del>Excluir</button>'}<button class="btn" data-ok>Salvar</button></div>`);
-    av.ligar(s);
-    s.$('[name=hora]').oninput = av.atualizar;
     if (!novo) s.$('[data-del]').onclick = async () => {
       if (!(await confirmar('Excluir esta aula e as presenças marcadas?'))) return;
       const idx = aulasL().indexOf(a); aulasL().splice(idx, 1); s.fechar(); commit();
@@ -489,7 +485,7 @@ const Estudos = (() => {
       if (!dias.length) return toast('Marque pelo menos um dia da semana.');
       if (!dataOk(v.data)) return toast('Informe a data de início.');
       if (v.ate && (!dataOk(v.ate) || v.ate < v.data)) return toast('Data final inválida.');
-      const d = { materiaId: v.materiaId, dias, hora: v.hora, horaFim: v.horaFim, local: v.local.trim(), data: v.data, ate: v.ate, repete: 'semanal', cada: 1, avisos: av.get() };
+      const d = { materiaId: v.materiaId, dias, hora: v.hora, horaFim: v.horaFim, local: v.local.trim(), data: v.data, ate: v.ate, repete: 'semanal', cada: 1 };
       if (novo) aulasL().push({ id: uid('au'), ...d, feitos: {} }); else Object.assign(a, d);
       s.fechar(); commit();
     };

@@ -65,6 +65,7 @@ const DEF = () => ({
   agua: { meta: 0, rapidos: [200, 300, 500], reg: [] },        // reg: { id, data, hora, ml }
   dieta: {
     metas: { kcal: 0, prot: 0, carb: 0, gord: 0, fib: 0 },   // 0 = sem meta
+    perfil: { sexo: '', nasc: '', altura: 0, nivel: 1.375, pesoMeta: 0, ritmo: 0.5 },   // IMC e déficit (aba Dieta > Déficit); ritmo = kg/semana
     tipos: ['Café da manhã', 'Lanche da manhã', 'Almoço', 'Lanche da tarde', 'Jantar', 'Ceia'],
     alimentos: [], refeicoes: [], modelos: [], receitas: [], compras: []
   },
@@ -184,6 +185,17 @@ const Graf = {
     const R = 40, C = 2 * Math.PI * R, p = Math.max(0, Math.min(100, pct));
     return `<div class="ring ${cls}"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="bg" cx="50" cy="50" r="${R}"/><circle class="fg" cx="50" cy="50" r="${R}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - p / 100)).toFixed(1)}"/></svg><b>${Math.round(p)}%</b></div>`;
   },
+  barras(vals, rots, o = {}) {                    // barras com linha de meta opcional; toque numa barra mostra o valor (use Graf.ligar depois)
+    const meta = o.meta || 0, pico = Math.max(1, meta, ...vals);
+    return `<div class="gr">${meta ? `<span class="gm" style="bottom:${(meta / pico * 100).toFixed(1)}%"></span>` : ''}${vals.map((v, k) => `<div data-t="${esc((o.tips || [])[k] || '')}"><i class="${meta && v >= meta ? 'ok' : ''}${meta ? ' m' : ''}" style="height:${Math.round(v / pico * 100)}%"></i></div>`).join('')}</div>`
+      + `<div class="gl">${rots.map(r => `<span>${r}</span>`).join('')}</div><div class="gtip mu sm" aria-live="polite">${meta ? 'Linha tracejada = meta. ' : ''}Toque numa barra para ver o valor.</div>`;
+  },
+  ligar(el) {
+    $$('.gr', el).forEach(g => {
+      const tip = g.parentNode.querySelector('.gtip'); if (!tip) return;
+      $$('[data-t]', g).forEach(b => b.onclick = () => { $$('[data-t]', g).forEach(x => x.classList.remove('sel')); b.classList.add('sel'); tip.textContent = b.dataset.t; });
+    });
+  },
   rosca(partes, tam = 124) {                      // partes: [{ v, cor }]
     const R = 38, C = 2 * Math.PI * R, tot = partes.reduce((a, x) => a + x.v, 0) || 1; let acc = 0;
     const arcos = partes.map(x => {
@@ -229,13 +241,6 @@ setInterval(() => $$('[data-cron]').forEach(e => { const t = DB.timers[e.dataset
 const ROOT = 'MEU APP';
 const b64 = str => btoa(unescape(encodeURIComponent(str)));
 async function salvarArquivo(sub, nome, texto, mime = 'text/plain') {
-  const sd = window.cordova && cordova.plugins && cordova.plugins.SaveDocuments;
-  if (sd) {
-    try {
-      const caminho = await new Promise((ok, er) => sd.save(ROOT, sub, nome, mime, b64(texto), ok, er));
-      return { ok: true, caminho };
-    } catch (e) { console.error('SaveDocuments falhou, usando download:', e); }
-  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([texto], { type: mime })); a.download = nome;
   document.body.appendChild(a); a.click();

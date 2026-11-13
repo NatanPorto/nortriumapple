@@ -2,20 +2,22 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https://ssl.gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:; connect-src 'self' data: blob: gap: https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com;; worker-src 'self'; manifest-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data: blob:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com;">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>NORTRIUM</title>
+<meta name="description" content="Finanças, agenda, saúde, estudos e trabalho num só lugar. Seus dados ficam no seu aparelho.">
+<meta name="theme-color" content="#060A08">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NORTRIUM">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/estilos.css">
-<link rel="stylesheet" href="css/pwa.css">
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0D0F0F">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="NORTRIUM">
-<link rel="icon" href="icons/favicon-32.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/temas.css">
 <style>
 #intro{position:fixed;inset:0;z-index:99999;background:#0D0F0F;display:flex;align-items:center;justify-content:center;transition:opacity .35s ease}
 #intro.sai{opacity:0;pointer-events:none}
@@ -39,11 +41,11 @@
 <nav class="bot" id="nav"></nav>
 <input type="file" id="file" accept=".json,application/json" hidden>
 <script src="js/core.js"></script>
-<script src="js/pwa-stubs.js"></script>
 <script src="js/financas.js"></script>
 <script src="js/fin-extras.js"></script>
 <script src="js/agenda.js"></script>
 <script src="js/treinos.js"></script>
+<script src="js/taco.js"></script>
 <script src="js/saude.js"></script>
 <script src="js/estudos.js"></script>
 <script src="js/curso.js"></script>
@@ -51,6 +53,6 @@
 <script src="js/hoje.js"></script>
 <script src="js/nuvem.js"></script>
 <script src="js/app.js"></script>
-<script src="js/pwa-init.js"></script>
+<script src="js/pwa.js"></script>
 </body>
 </html>

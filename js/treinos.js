@@ -3,7 +3,7 @@
    TREINOS — fichas, execução do treino, histórico e medidas
    ========================================================= */
 const Treinos = (() => {
-  const S = { area: 'treino', seg: 'fichas', per: 30, ex: '', met: 'carga' };
+  const S = { area: 'resumo', seg: 'fichas', per: 30, ex: '', met: 'carga', pp: 90 };
   const RE = /^(.*?)\s+(\d+)\s*[x×]\s*(\d+)(?:\s+(\d+(?:[.,]\d+)?)\s*(?:kg)?)?(?:\s+(\d+)\s*(?:s|seg))?\s*$/i;
   const parseEx = txt => txt.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
     const m = l.match(RE); return m ? { nome: m[1].trim(), series: +m[2], reps: +m[3], carga: m[4] ? num(m[4]) : 0, descanso: m[5] ? +m[5] : 0 } : { nome: l, series: 3, reps: 10, carga: 0, descanso: 0 };
@@ -49,7 +49,7 @@ const Treinos = (() => {
   const fmtVol = v => v >= 10000 ? (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' t' : Math.round(v).toLocaleString('pt-BR') + ' kg';
   const compacto = v => v >= 1000 ? (v / 1000).toFixed(1).replace('.', ',') + 'k' : String(Math.round(v));
 
-  const AREAS = [['treino', 'Treino'], ['dieta', 'Dieta'], ['agua', 'Água']];
+  const AREAS = [['resumo', 'Resumo'], ['treino', 'Treino'], ['dieta', 'Dieta'], ['agua', 'Água']];
   const topo = () => `<div class="seg sm" id="areas">${AREAS.map(([k, l]) => `<button data-a="${k}" class="${S.area === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   function render(el) {
     document.body.dataset.area = S.area;
@@ -106,21 +106,40 @@ const Treinos = (() => {
     };
   }
 
+  /* gráfico de peso: pontos reais (apagados) + média móvel de 7 dias (linha) + peso desejado (tracejado, se definido) */
+  function graficoPeso(todos) {
+    const hj = hoje(), ini = S.pp === 'all' ? '0000-01-01' : addDias(hj, -(+S.pp || 90));
+    const pts = todos.filter(m => m.data >= ini);
+    if (pts.length < 2) return '<p class="mu sm" style="margin:10px 0 0">Registre pelo menos dois pesos neste período para ver o gráfico.</p>';
+    const mm = m => { const j = todos.filter(x => x.data <= m.data && x.data >= addDias(m.data, -6)); return j.reduce((t, x) => t + x.peso, 0) / j.length; };
+    const meta = (DB.dieta && DB.dieta.perfil && DB.dieta.perfil.pesoMeta) || 0;
+    const t0 = pd(pts[0].data).getTime(), t1 = pd(pts[pts.length - 1].data).getTime() || t0 + 1;
+    const vs = pts.map(m => m.peso).concat(pts.map(mm)); const mn0 = Math.min(...vs), mx0 = Math.max(...vs);
+    const sobe = meta && meta >= mn0 - 8 && meta <= mx0 + 8;                       // só desenha a meta se estiver perto da faixa do gráfico
+    const mn = Math.min(mn0, sobe ? meta : mn0) - 0.4, mx = Math.max(mx0, sobe ? meta : mx0) + 0.4;
+    const W = 320, H = 130, L = 34, R = 8, T = 10, B = 20;
+    const X = d => L + ((pd(d).getTime() - t0) / ((t1 - t0) || 1)) * (W - L - R), Y = v => T + (1 - (v - mn) / ((mx - mn) || 1)) * (H - T - B);
+    const linha = pts.map(m => `${X(m.data).toFixed(1)},${Y(mm(m)).toFixed(1)}`).join(' ');
+    const f = v => numStr(Math.round(v * 10) / 10);
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Evolução do peso com média de 7 dias" style="display:block;margin-top:10px">
+      <line x1="${L}" y1="${T}" x2="${W - R}" y2="${T}" stroke="var(--ln)"/><line x1="${L}" y1="${H - B}" x2="${W - R}" y2="${H - B}" stroke="var(--ln)"/>
+      <text x="${L - 4}" y="${T + 4}" text-anchor="end" font-size="10" fill="var(--mu)">${f(mx)}</text><text x="${L - 4}" y="${H - B + 3}" text-anchor="end" font-size="10" fill="var(--mu)">${f(mn)}</text>
+      ${sobe ? `<line x1="${L}" y1="${Y(meta).toFixed(1)}" x2="${W - R}" y2="${Y(meta).toFixed(1)}" stroke="var(--mu)" stroke-width="1.2" stroke-dasharray="4 4"/><text x="${W - R}" y="${(Y(meta) - 4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--mu)">desejado ${f(meta)}</text>` : ''}
+      ${pts.map(m => `<circle cx="${X(m.data).toFixed(1)}" cy="${Y(m.peso).toFixed(1)}" r="2.6" fill="var(--mu)" opacity=".55"/>`).join('')}
+      <polyline points="${linha}" fill="none" stroke="var(--cor)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+      <text x="${L}" y="${H - 4}" font-size="10" fill="var(--mu)">${fmtData(pts[0].data)}</text><text x="${W - R}" y="${H - 4}" text-anchor="end" font-size="10" fill="var(--mu)">${fmtData(pts[pts.length - 1].data)}</text></svg>
+      <small class="mu" style="display:block;margin-top:6px">Pontos = pesos registrados · linha = média dos 7 dias anteriores (alisa a oscilação do dia a dia).</small>`;
+  }
   function rCorpo(el) {
     const l = [...DB.treino.medidas].sort((a, b) => b.data.localeCompare(a.data));
     const pesos = [...l].reverse().filter(m => m.peso);
-    let spark = '';
-    if (pesos.length > 1) {
-      const v = pesos.map(m => m.peso), mn = Math.min(...v), mx = Math.max(...v), W = 300, H = 60;
-      const pts = v.map((y, i) => `${(i / (v.length - 1) * W).toFixed(1)},${(H - 6 - (mx === mn ? .5 : (y - mn) / (mx - mn)) * (H - 12)).toFixed(1)}`).join(' ');
-      spark = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="60" role="img" aria-label="Evolução do peso"><polyline points="${pts}" fill="none" stroke="var(--cor)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
-    }
-    el.innerHTML = (pesos.length ? `<div class="card"><small class="mu">Peso atual</small><div class="big">${numStr(pesos[pesos.length - 1].peso)} kg</div>${spark}</div>` : '') +
+    el.innerHTML = (pesos.length ? `<div class="card"><small class="mu">Peso atual</small><div class="big">${numStr(pesos[pesos.length - 1].peso)} kg</div>${Saude.imcTxt() ? `<small class="mu">${Saude.imcTxt()}</small>` : ''}<div class="seg sm" id="pp" style="margin-top:12px">${[[30, '30 dias'], [90, '90 dias'], ['all', 'Tudo']].map(([v, l]) => `<button type="button" data-pp="${v}" class="${String(S.pp) === String(v) ? 'on' : ''}">${l}</button>`).join('')}</div>${graficoPeso(pesos)}</div>` : '') +
       (l.length ? `<div class="card" style="padding:2px 14px">${l.map((m, i) => {
         const ant = l.slice(i + 1).find(x => x.peso && m.peso), d = ant ? r2(m.peso - ant.peso) : null;
         return `<div class="row" data-m="${m.id}"><div class="t"><b>${m.peso ? numStr(m.peso) + ' kg' : 'Medidas'}</b><small>${fmtData(m.data)}${m.cintura ? ' · cintura ' + numStr(m.cintura) + ' cm' : ''}${m.gordura ? ' · ' + numStr(m.gordura) + '% gordura' : ''}</small></div>${d !== null && d !== 0 ? `<span class="n ${d > 0 ? 'neg' : 'pos'}">${d > 0 ? '+' : ''}${numStr(d)}</span>` : ''}</div>`;
       }).join('')}</div>` : '<div class="empty">Registre peso e medidas para acompanhar sua evolução.</div>') +
       '<div class="acts" style="justify-content:flex-start"><button class="btn sec" id="nm">Registrar medidas</button></div>';
+    $$('[data-pp]', el).forEach(b => b.onclick = () => { S.pp = b.dataset.pp === 'all' ? 'all' : +b.dataset.pp; refresh(); });
     $$('[data-m]', el).forEach(r => r.onclick = () => formMedida(DB.treino.medidas.find(m => m.id === r.dataset.m)));
     $('#nm', el).onclick = () => formMedida(null);
   }
@@ -367,10 +386,10 @@ const Treinos = (() => {
 
     // volume por dia (ou por semana)
     const barras = [];
-    if (per === 90) for (let w = 0; w < 12; w++) { const a = addDias(ini, w * 7); let m_ = 0; for (let k = 0; k < 7; k++) m_ += porDia[addDias(a, k)] || 0; barras.push({ m: m_, rot: w % 3 === 0 ? `${+a.slice(8)}/${+a.slice(5, 7)}` : '', v: '' }); }
-    else for (let k = 0; k < per; k++) { const d = addDias(ini, k), m_ = porDia[d] || 0; barras.push({ m: m_, rot: per === 7 ? DIAS[pd(d).getDay()] : (k % 5 === 0 ? String(+d.slice(8)) : ''), v: per === 7 && m_ ? compacto(m_) : '' }); }
+    if (per === 90) for (let w = 0; w < 12; w++) { const a = addDias(ini, w * 7); let m_ = 0; for (let k = 0; k < 7; k++) m_ += porDia[addDias(a, k)] || 0; barras.push({ m: m_, rot: w % 3 === 0 ? `${+a.slice(8)}/${+a.slice(5, 7)}` : '', v: '', t: 'Semana de ' + fmtData(a) + ': ' + fmtVol(m_) }); }
+    else for (let k = 0; k < per; k++) { const d = addDias(ini, k), m_ = porDia[d] || 0; barras.push({ m: m_, rot: per === 7 ? DIAS[pd(d).getDay()] : (k % 5 === 0 ? String(+d.slice(8)) : ''), v: per === 7 && m_ ? compacto(m_) : '', t: fmtDiaCurto(d) + ': ' + fmtVol(m_) }); }
     const pico = Math.max(1, ...barras.map(b => b.m));
-    const grafico = `<div class="gr">${barras.map(b => `<div><i style="height:${Math.round(b.m / pico * 100)}%"></i></div>`).join('')}</div>${per === 7 ? `<div class="gl">${barras.map(b => `<span>${b.v}</span>`).join('')}</div>` : ''}<div class="gl">${barras.map(b => `<span>${b.rot}</span>`).join('')}</div>`;
+    const grafico = `<div class="gr">${barras.map(b => `<div data-t="${esc(b.t)}"><i style="height:${Math.round(b.m / pico * 100)}%"></i></div>`).join('')}</div>${per === 7 ? `<div class="gl">${barras.map(b => `<span>${b.v}</span>`).join('')}</div>` : ''}<div class="gl">${barras.map(b => `<span>${b.rot}</span>`).join('')}</div><div class="gtip mu sm" aria-live="polite">Toque numa barra para ver o valor.</div>`;
 
     // frequência: treinos feitos × dias previstos nas fichas (8 semanas)
     const prev = DB.treino.fichas.reduce((t, f) => t + (f.dias || []).length, 0);
@@ -436,6 +455,7 @@ const Treinos = (() => {
       <div class="dia">Evolução por exercício</div><div class="card">${evo}</div>
       <div class="dia">Dias de treino (5 semanas)</div><div class="card">${calend}<small class="mu" style="display:block;margin-top:8px">Dia mais escuro = mais de um treino.</small></div>
       <p class="hint">Volume = repetições × carga das séries de trabalho concluídas (aquecimento fica de fora). O 1RM é uma estimativa pela fórmula de Epley e serve só como referência.</p>`;
+    Graf.ligar(el);
     ligarFaixa(el);
     $$('[data-p]', el).forEach(b => b.onclick = () => { S.per = +b.dataset.p; refresh(); });
     $$('[data-met]', el).forEach(b => b.onclick = () => { S.met = b.dataset.met; refresh(); });
@@ -447,5 +467,5 @@ const Treinos = (() => {
     fab: () => S.area !== 'treino' ? Saude.fab(S.area) : S.seg === 'fichas' ? () => formFicha(null) : S.seg === 'corpo' ? () => formMedida(null) : null,
     fabLabel: () => S.area !== 'treino' ? Saude.fabLabel(S.area) : S.seg === 'corpo' ? 'Registrar medidas' : 'Nova ficha'
   });
-  return { S, fichasDeHoje, feitoHoje, treinosNaSemana, iniciar, retomar, andamento, faixaAndamento, ligarFaixa };
+  return { S, formMedida, fichasDeHoje, feitoHoje, treinosNaSemana, iniciar, retomar, andamento, faixaAndamento, ligarFaixa };
 })();

@@ -74,7 +74,9 @@ html[data-estilo="editorial"]{--r:0px;--r2:0px}
 /* ============ FACETADO: escuro e geométrico, canto cortado como o logo ============ */
 html[data-estilo="facetado"]{--r:0px;--r2:0px}
 [data-estilo="facetado"] .card,[data-estilo="facetado"] .kpi,[data-estilo="facetado"] .hero,[data-estilo="facetado"] .prog,[data-estilo="facetado"] .sum div,[data-estilo="facetado"] .run,[data-estilo="facetado"] .banner,[data-estilo="facetado"] .ativ{border:0;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,0 100%)}
+[data-estilo="facetado"] .card,[data-estilo="facetado"] .kpi,[data-estilo="facetado"] .hero,[data-estilo="facetado"] .prog,[data-estilo="facetado"] .sum div,[data-estilo="facetado"] .banner,[data-estilo="facetado"] .ativ{box-shadow:inset 0 0 0 1px var(--ln);background:linear-gradient(45deg,color-mix(in srgb,var(--mc) 38%,var(--sf2)) 50%,transparent 50%) top right/var(--cut) var(--cut) no-repeat,var(--sf)}
 [data-estilo="facetado"] .kpi,[data-estilo="facetado"] .ativ{border-left:3px solid var(--mc)}
+[data-estilo="facetado"] .card.mod{border-left:3px solid var(--cor)}
 [data-estilo="facetado"] .btn,[data-estilo="facetado"] #fab{clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%)}
 [data-estilo="facetado"] .big,[data-estilo="facetado"] .kpi b,[data-estilo="facetado"] .cron,[data-estilo="facetado"] .hi .nome{font-weight:700;letter-spacing:-.03em}
 [data-estilo="facetado"] nav.bot button.on::before{height:3px;clip-path:polygon(0 0,100% 0,calc(100% - 3px) 100%,3px 100%)}
@@ -82,7 +84,6 @@ html[data-estilo="facetado"]{--r:0px;--r2:0px}
 
 /* ============ SUAVE: cantos arredondados, cards claros, barra flutuante ============ */
 html[data-estilo="suave"]{--r:20px;--r2:12px;--nav:78px}
-html[data-estilo="suave"]:not([data-tema="escuro"]){--bg:#F4F1EA;--sf:#FFFFFF;--sf2:#F4F1EA;--ln:#E2DED3;--ln2:#ECE8DD;--mu:#6B6A63}
 [data-estilo="suave"] svg *{stroke-linecap:round;stroke-linejoin:round}
 [data-estilo="suave"] .ring circle{stroke-linecap:round}
 [data-estilo="suave"] .card,[data-estilo="suave"] .kpi,[data-estilo="suave"] .hero,[data-estilo="suave"] .prog,[data-estilo="suave"] .sum div,[data-estilo="suave"] .ativ,[data-estilo="suave"] .banner{border:0;border-radius:22px}
@@ -98,9 +99,11 @@ html[data-estilo="suave"]:not([data-tema="escuro"]){--bg:#F4F1EA;--sf:#FFFFFF;--
 [data-estilo="suave"] .cal .d,[data-estilo="suave"] .pill{border-radius:12px}
 [data-estilo="suave"] .sheet{border-radius:24px 24px 0 0}
 [data-estilo="suave"] .sheet.full{border-radius:0}
-[data-estilo="suave"] nav.bot{left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);padding:6px 8px;border:0;border-radius:32px;background:#1B1A17}
-[data-estilo="suave"][data-tema="escuro"] nav.bot,html[data-estilo="suave"][data-tema="escuro"] nav.bot{background:#1B2420}
-[data-estilo="suave"] nav.bot button{color:#C9C6BC;padding:10px 0;border-radius:24px;flex:0 0 20%}
-[data-estilo="suave"] nav.bot button.on{background:#F4F1EA;color:#1B1A17;font-weight:700}
+[data-estilo="suave"] nav.bot{left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);padding:6px 8px;border:0;border-radius:32px;background:var(--nvbg);box-shadow:0 14px 32px -16px rgba(0,0,0,.55)}
+[data-estilo="suave"] nav.bot button{color:var(--nvfg);padding:10px 0;border-radius:24px;flex:0 0 20%}
+[data-estilo="suave"] nav.bot button.on{background:var(--nvac);color:var(--nvacfg);font-weight:700}
 [data-estilo="suave"] nav.bot button.on::before{display:none}
 [data-estilo="suave"] .toast{bottom:calc(var(--nav) + env(safe-area-inset-bottom,0px) + 86px)}
+
+/* foco visível em qualquer estilo */
+button:focus-visible,[role=button]:focus-visible{outline:2px solid var(--cor);outline-offset:2px}

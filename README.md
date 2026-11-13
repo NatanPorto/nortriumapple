@@ -1,24 +1,36 @@
-# NORTRIUM — PWA
+# NORTRIUM — versão PWA
 
-Versão web instalável do NORTRIUM (finanças, agenda, saúde, estudos e trabalho). Funciona offline depois da primeira visita e guarda os dados no próprio aparelho (IndexedDB).
+Finanças, agenda, saúde, estudos e trabalho num só lugar. Roda no navegador e pode ser instalado no celular como um app. **Seus dados ficam só no seu aparelho** (não há servidor nem conta).
 
 ## Publicar no GitHub Pages
-1. Crie um repositório no GitHub (por exemplo `nortrium`).
-2. Envie **o conteúdo desta pasta** para a raiz do repositório. O `index.html` deve ficar na raiz, ao lado de `sw.js` e `manifest.webmanifest`.
-3. No repositório, abra **Settings › Pages**, escolha **Deploy from a branch**, branch `main`, pasta `/ (root)`, e salve.
-4. Em alguns minutos o app abre em `https://SEU-USUARIO.github.io/nortrium/`.
+1. Crie um repositório no GitHub (pode ser privado só se o seu plano permitir Pages; público funciona sempre).
+2. Envie **todos os arquivos desta pasta** para a raiz do repositório (incluindo `.nojekyll` e as pastas `css`, `js`, `fonts`, `icons`, `img`, `video`).
+3. Em **Settings → Pages**, em *Build and deployment*, escolha **Deploy from a branch**, branch `main` e pasta `/ (root)`. Salve.
+4. Em 1 a 2 minutos o app estará em `https://SEU-USUARIO.github.io/NOME-DO-REPOSITORIO/`.
 
-## Instalar
-- **Android (Chrome):** menu ⋮ › Instalar app.
-- **iPhone (Safari):** Compartilhar › Adicionar à Tela de Início. Instalado, o iOS não apaga os dados por inatividade.
+## Instalar no celular
+- **Android (Chrome):** abra o link, vá em **Ajustes → Aplicativo → Instalar o app** (ou menu ⋮ → *Instalar app*).
+- **iPhone (Safari):** botão Compartilhar → **Adicionar à Tela de Início**.
 
-## Atualizar depois
-Troque o número em `VERSAO`, no começo do `sw.js`, a cada publicação (nesta versão: `nortrium-1.13.0`). Sem isso, quem já visitou continua vendo a versão antiga em cache.
+## Levar os dados do app Android
+No app Android: **Ajustes → Dados → Salvar backup**. No PWA: **Ajustes → Dados → Restaurar / importar** e escolha o arquivo. Backups do Fluxo de Caixa também são aceitos.
 
-## O que mudou em relação ao app Android
-Removido, por depender do Android: notificações agendadas, widgets da tela inicial, relógio (Health Connect) e backup automático em Documentos.
-Continuam: todas as abas, estilos visuais, modo foco, backup e restauração por arquivo, PIN, backup no Google Drive.
+## O que foi removido (não funciona no navegador)
+- Notificações e lembretes: *Notificações*, *Meus avisos*, *Diagnóstico*, o campo **Avisos** dos compromissos e das aulas, o cartão **Avisos** do Hoje e o lembrete de água.
+- **Widgets** da tela inicial.
+- **Relógio** (Health Connect) e o cartão dele no Hoje.
+- Cópia automática em *Documentos/MEU APP/Backups*. No lugar, o app lembra de salvar um backup quando faz tempo (o backup manual baixa um arquivo).
 
-## Seus dados
-O PWA e o app Android guardam dados separados. Para levar os dados do app: **Ajustes › Salvar backup** no app e **Restaurar / importar** no PWA.
-Fontes: Inter e IBM Plex Mono (licença OFL, em `fonts/`).
+Continuam funcionando: Finanças (inclusive cartões, metas, investimentos e exportação em CSV), Agenda, Saúde (Resumo, Treino, Dieta e Água), Estudos, Curso, Trabalho, temas e personalização, PIN, backup manual e backup no Google Drive (com o script que o próprio app mostra em Ajustes, se você usa).
+
+## Cuidados
+- Os dados ficam no armazenamento do navegador. Se você limpar os dados do site ou desinstalar o navegador, eles somem: **salve backups com frequência** e guarde o arquivo fora do aparelho.
+- No iPhone, o Safari pode apagar dados de sites usados pouco quando o app **não** está instalado na tela inicial. Instale o app.
+- O app abre sem internet depois da primeira visita. O vídeo de abertura só toca com internet (sem ele, a abertura é pulada).
+- Cada endereço (usuário.github.io/repo) tem seus próprios dados. Mudar de endereço exige backup e restauração.
+
+## Atualizar o app
+Substitua os arquivos no repositório e faça o commit. Quem já tem o app instalado recebe a versão nova na abertura seguinte e vê um aviso. Se mudar muitos arquivos de uma vez, mude também o número em `CACHE` no começo do `sw.js` (por exemplo `nortrium-2`).
+
+## Estrutura
+`index.html` · `manifest.webmanifest` · `sw.js` (offline) · `js/` · `css/` · `fonts/` · `icons/` · `img/` · `video/intro.mp4` · `privacypolicy.html`

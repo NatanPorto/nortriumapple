@@ -29,18 +29,67 @@ const ICONE_NAV = { treino: 'saude' };
 /* ---------- vídeo de abertura (lido por js/intro.js) ---------- */
 const introModo = () => { try { return localStorage.getItem('nortrium.intro') || 'm'; } catch (e) { return 'm'; } };
 
-/* ---------- estilo visual (forma, fonte e navegação; as cores vêm do tema) ---------- */
-const ESTILOS = [
-  ['editorial', 'Editorial', 'Linhas finas e números em fonte técnica. Denso e sóbrio.'],
-  ['facetado', 'Facetado', 'Cantos cortados como o logo. Escuro e geométrico.'],
-  ['suave', 'Suave', 'Cantos arredondados, cards claros e barra flutuante.']
+/* ---------- aparência: modo (escuro/claro), paleta, estilo ----------
+   As cores de cada paleta ficam em css/temas.css; a forma de cada estilo, em css/estilos.css e css/temas.css. */
+const PALETAS = [
+  ['nortrium', 'Verde-menta', 'Verde-menta, a identidade do app'],
+  ['oceano', 'Azul-petróleo', 'Azul-petróleo com destaque ciano'],
+  ['noturno', 'Azul-noite', 'Azul-noite com destaque índigo'],
+  ['ametista', 'Roxo-ameixa', 'Ameixa com destaque lilás'],
+  ['brasa', 'Laranja', 'Cinza quente com destaque laranja'],
+  ['rose', 'Rosa', 'Vinho suave com destaque rosa'],
+  ['grafite', 'Cinza', 'Cinza neutro, quase monocromático'],
+  ['ultravioleta', 'Roxo vivo', 'Roxo e lavanda, no clima do Nubank'],
+  ['streaming', 'Preto e verde', 'Preto e verde-vivo, no clima do Spotify'],
+  ['servidor', 'Cinza e violeta', 'Cinza-azulado e violeta, no clima do Discord'],
+  ['papel', 'Branco e azul', 'Branco quente e azul discreto, no clima do Notion'],
+  ['codigo', 'Azul-grafite', 'Azul-grafite de editor, no clima do GitHub'],
+  ['lima', 'Verde-lima', 'Verde-lima e cinza limpo, no clima do Duolingo'],
+  ['nord', 'Gelo', 'Gelo e azul-ártico, a paleta Nord'],
+  ['catppuccin', 'Pastel lilás', 'Pastéis sobre lilás, a paleta Catppuccin'],
+  ['gruvbox', 'Retrô quente', 'Retrô quente, a paleta Gruvbox']
 ];
+const ESTILOS = [
+  ['editorial', 'Linhas finas', 'Linhas finas e números em fonte técnica. Denso e sóbrio.'],
+  ['facetado', 'Canto cortado', 'Canto cortado como o logo, com uma dobra na cor do módulo.'],
+  ['suave', 'Arredondado', 'Cantos arredondados, cards claros e barra de abas flutuante.'],
+  ['vidro', 'Vidro', 'Superfícies translúcidas sobre um brilho da cor da paleta.'],
+  ['bloco', 'Contorno grosso', 'Contornos grossos, sombras duras e cores chapadas. Botões afundam ao toque.'],
+  ['tonal', 'Tingido', 'Cards tingidos pela paleta, botões em pílula e aba ativa em cápsula (estilo Material You).'],
+  ['ludico', 'Divertido', 'Botões grossos "de tecla", contornos de 2px e barras gordas, como em apps de aprender.'],
+  ['sistema', 'Nativo', 'Título grande, listas agrupadas, abas translúcidas e filtros segmentados, como nos apps nativos.']
+];
+/* temas prontos: um toque aplica modo + paleta + estilo + destaque único (inspirados em apps conhecidos) */
+const PRESETS = [
+  ['padrao', 'Padrão do app', 'O visual original do Nortrium', { tema: 'escuro', paleta: 'nortrium', estilo: 'editorial', mono: false }],
+  ['fintech', 'Banco digital', 'No clima do Nubank', { tema: 'claro', paleta: 'ultravioleta', estilo: 'suave', mono: true }],
+  ['streaming', 'Música', 'No clima do Spotify', { tema: 'escuro', paleta: 'streaming', estilo: 'tonal', mono: true }],
+  ['comunidade', 'Chat', 'No clima do Discord', { tema: 'escuro', paleta: 'servidor', estilo: 'suave', mono: true }],
+  ['caderno', 'Anotações', 'No clima do Notion', { tema: 'claro', paleta: 'papel', estilo: 'sistema', mono: true }],
+  ['terminal', 'Programador', 'No clima do GitHub', { tema: 'escuro', paleta: 'codigo', estilo: 'editorial', mono: true }],
+  ['aprender', 'Estudo', 'No clima do Duolingo', { tema: 'claro', paleta: 'lima', estilo: 'ludico', mono: true }],
+  ['nordico', 'Gelo e vidro', 'Paleta Nord com vidro', { tema: 'escuro', paleta: 'nord', estilo: 'vidro', mono: true }],
+  ['retro', 'Retrô', 'Gruvbox com blocos', { tema: 'escuro', paleta: 'gruvbox', estilo: 'bloco', mono: true }]
+];
+const nomeTema = () => { const pr = PRESETS.find(q => presetOn(q[3])); const p = PALETAS.find(x => x[0] === paletaAtual()), e = ESTILOS.find(x => x[0] === estiloAtual()); return pr ? pr[1] : `${p[1]} · ${e[1]}${DB.cfg.tema === 'claro' ? ' · claro' : DB.cfg.tema === 'auto' ? ' · automático' : ''}`; };
+const presetOn = c => DB.cfg.tema === c.tema && paletaAtual() === c.paleta && estiloAtual() === c.estilo && !!DB.cfg.mono === !!c.mono && !DB.cfg.amoled;
+const estiloAtual = () => (ESTILOS.some(e => e[0] === DB.cfg.estilo) ? DB.cfg.estilo : 'editorial');
+const paletaAtual = () => (PALETAS.some(p => p[0] === DB.cfg.paleta) ? DB.cfg.paleta : 'nortrium');
 
 /* ---------- tema ---------- */
+let temaJaAplicado = false;
 function aplicarTema() {
   const t = DB.cfg.tema, escuro = t === 'escuro' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.dataset.tema = escuro ? 'escuro' : 'claro';
-  document.documentElement.dataset.estilo = ESTILOS.some(e => e[0] === DB.cfg.estilo) ? DB.cfg.estilo : 'editorial';
+  const h = document.documentElement, d = h.dataset;
+  if (temaJaAplicado) { h.classList.add('tt'); clearTimeout(aplicarTema.t); aplicarTema.t = setTimeout(() => h.classList.remove('tt'), 400); }   // troca suave de cores
+  temaJaAplicado = true;
+  d.tema = escuro ? 'escuro' : 'claro';
+  d.estilo = estiloAtual();
+  d.paleta = paletaAtual();
+  if (DB.cfg.amoled) d.amoled = ''; else delete d.amoled;
+  if (DB.cfg.mono) d.mono = ''; else delete d.mono;
+  const bg = getComputedStyle(h).getPropertyValue('--bg').trim(), mt = document.querySelector('meta[name="theme-color"]');
+  if (mt && bg) mt.setAttribute('content', bg);                  // barra de status do celular acompanha o tema
 }
 if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', aplicarTema);
 
@@ -64,15 +113,22 @@ function bloquear() {
 let pausadoEm = 0;
 const aoSair = () => { pausadoEm = Date.now(); Store.gravar(); };
 const aoVoltar = () => { if (DB.cfg.pin && pausadoEm && Date.now() - pausadoEm > (DB.cfg.lockMin || 0) * 60000) bloquear(); pausadoEm = 0; refresh(); };
-document.addEventListener('pause', aoSair);
-document.addEventListener('resume', aoVoltar);
 document.addEventListener('visibilitychange', () => document.hidden ? aoSair() : aoVoltar());
-document.addEventListener('backbutton', () => {
-  if ($('.lock')) return;
-  const o = overlays[overlays.length - 1]; if (o) return o.tentarFechar();
-  if (modAtual === 'estudo' && Estudos.S.mat) { Estudos.S.mat = null; return refresh(); }
-  if (modAtual !== abasAtivas()[0]) return go(abasAtivas()[0]);
-  if (navigator.app && navigator.app.exitApp) navigator.app.exitApp();
+/* botão "voltar" do celular (no PWA vira popstate): fecha janela, volta de tela e só então sai (dois toques seguidos) */
+let sairAte = 0;
+const empilha = () => history.pushState({ nortrium: 1 }, '');
+function voltarApp() {
+  if ($('.lock')) return true;
+  const o = overlays[overlays.length - 1]; if (o) { o.tentarFechar(); return true; }
+  if (modAtual === 'estudo' && Estudos.S.mat) { Estudos.S.mat = null; refresh(); return true; }
+  if (modAtual !== abasAtivas()[0]) { go(abasAtivas()[0]); return true; }
+  return false;
+}
+history.replaceState({ nortrium: 0 }, ''); empilha();
+window.addEventListener('popstate', () => {
+  if (voltarApp()) return empilha();
+  if (Date.now() < sairAte) return history.back();
+  sairAte = Date.now() + 2000; toast('Toque em voltar de novo para sair.'); empilha();
 });
 
 /* ---------- backup ---------- */
@@ -84,15 +140,12 @@ async function salvarBackup() {
   DB.cfg.ultimoBackup = new Date().toISOString(); Store.salvar();
   toast(r.ok ? `Backup salvo em ${r.caminho}` : 'Não foi possível salvar o backup.');
 }
-async function autoBackup() {                   // PWA: sem cópia automática (o navegador baixaria um arquivo a cada vez)
-  return;
+function lembrarBackup() {                    // o navegador não salva arquivos sozinho: avisa quando faz tempo
   const u = DB.cfg.ultimoBackup, temDados = DB.fin.tx.length || DB.agenda.eventos.length || DB.treino.sessoes.length || DB.estudo.sessoes.length || DB.trabalho.tarefas.length;
-  if (!temDados || (u && Date.now() - new Date(u).getTime() < 7 * 864e5)) return;
-  try {
-    const slot = (DB.cfg.slot || 0) % 3 + 1;
-    await salvarArquivo('Backups', `auto-${slot}.json`, pacote(), 'application/json');
-    DB.cfg.ultimoBackup = new Date().toISOString(); DB.cfg.slot = slot; Store.salvar();
-  } catch (e) { console.error('Backup automático falhou', e); }
+  if (!temDados) return;
+  const dias = u ? Math.floor((Date.now() - new Date(u).getTime()) / 864e5) : null;
+  if (dias === null) toast('Seus dados ficam só neste aparelho. Salve um backup em Ajustes > Dados.');
+  else if (dias >= 14) toast(`Faz ${dias} dias desde o último backup. Salve outro em Ajustes > Dados.`);
 }
 function lerArquivo() {
   return new Promise((ok, er) => {
@@ -144,29 +197,25 @@ async function importarFluxo(o) {
 /* ---------- ajustes ---------- */
 function ajustes() {
   const u = DB.cfg.ultimoBackup;
+  const mrow = (id, titulo, sub) => `<button type="button" class="mrow" id="${id}"><span class="t"><b>${titulo}</b>${sub ? `<small>${sub}</small>` : ''}</span><span class="go">›</span></button>`;
   const s = sheet('Ajustes', `
     ${F('Seu nome (aparece no painel Hoje)', inp('nome', DB.cfg.nome, 'autocomplete="off"'))}
-    ${F('Tema', sel('tema', [['escuro', 'Escuro'], ['claro', 'Claro'], ['auto', 'Automático']], DB.cfg.tema))}
-    <div class="dia">Estilo visual</div>
-    <div class="estilos" id="estilos">${ESTILOS.map(([id, n, d]) => `<button type="button" data-e="${id}" class="${(ESTILOS.some(e => e[0] === DB.cfg.estilo) ? DB.cfg.estilo : 'editorial') === id ? 'on' : ''}"><b>${n}</b><small>${d}</small></button>`).join('')}</div>
-    ${F('Vídeo de abertura', sel('intro', [['m', 'Ligado'], ['0', 'Desligado']], introModo() === '0' ? '0' : 'm'))}
+    <div class="dia">Aparência</div>
+    <div class="mlist"><button type="button" class="mrow" id="tm"><span class="pv" data-p="${paletaAtual()}"><i></i></span><span class="t"><b>Tema e personalização</b><small>${nomeTema()}</small></span><span class="go">›</span></button></div>
     <div class="dia">Abas do app</div>
     <p class="mu sm" style="margin:0 0 6px">Escolha quais abas ficam ativas. As desligadas somem da barra e do painel Hoje; os dados delas continuam guardados.</p>
     <div id="abas">${ABAS.map(([id, nome]) => `<label class="sw"><span>${nome}</span><input type="checkbox" name="ab_${id}"${abaOn(id) ? ' checked' : ''}></label>`).join('')}</div>
-    <div class="dia">Bloqueio</div>
-    <div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn sec" id="pin1">${DB.cfg.pin ? 'Alterar PIN' : 'Definir PIN'}</button>${DB.cfg.pin ? '<button class="btn sec" id="pin0">Remover PIN</button>' : ''}</div>
+    ${window.pwaPrompt ? `<div class="dia">Aplicativo</div><div class="mlist">${mrow('inst', 'Instalar o app', 'Adiciona à tela inicial e abre em tela cheia')}</div>` : ''}
+    <div class="dia">Segurança</div>
+    <div class="mlist">${mrow('pin1', DB.cfg.pin ? 'Alterar PIN' : 'Definir PIN', DB.cfg.pin ? 'Bloqueio por PIN ligado' : 'Bloqueia o app ao abrir')}${DB.cfg.pin ? mrow('pin0', 'Remover PIN', 'Desliga o bloqueio') : ''}</div>
     ${DB.cfg.pin ? F('Pedir o PIN depois de', sel('lockMin', [[0, 'Sempre ao reabrir'], [1, '1 minuto'], [5, '5 minutos'], [15, '15 minutos']], DB.cfg.lockMin)) : ''}
-    <div class="dia">Backup</div>
-    <p class="mu sm" style="margin:0 0 8px">${u ? 'Último backup: ' + new Date(u).toLocaleString('pt-BR') : 'Você ainda não fez backup.'} O backup é baixado como arquivo: guarde-o fora do navegador (nuvem, e-mail ou pendrive).</p>
-    <div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn" id="bk">Salvar backup</button><button class="btn sec" id="rs">Restaurar / importar</button></div>
-    <p class="hint">“Restaurar / importar” aceita backups deste app e também o arquivo de backup do Fluxo de Caixa (importa as finanças).</p>
+    <div class="dia">Dados</div>
+    <div class="mlist">${mrow('bk', 'Salvar backup', u ? 'Último backup: ' + new Date(u).toLocaleString('pt-BR') : 'Você ainda não fez backup')}${mrow('rs', 'Restaurar / importar', 'Backups do Nortrium ou do Fluxo de Caixa')}</div>
+    <p class="hint" style="margin-top:8px">Seus dados ficam só neste navegador, neste aparelho. Salve backups com frequência e guarde o arquivo fora do aparelho (por exemplo, no Drive). “Restaurar / importar” aceita backups do Nortrium, inclusive do app Android, e do Fluxo de Caixa.</p>
     ${Nuvem.bloco()}`);
-  const grava = () => { const v = vals(s.el); DB.cfg.nome = (v.nome || '').trim(); DB.cfg.tema = v.tema; if (v.lockMin !== undefined) DB.cfg.lockMin = +v.lockMin; if (v.intro !== undefined) { try { localStorage.setItem('nortrium.intro', v.intro); } catch (e) {} } Store.salvar(); aplicarTema(); };
+  const grava = () => { const v = vals(s.el); DB.cfg.nome = (v.nome || '').trim(); if (v.lockMin !== undefined) DB.cfg.lockMin = +v.lockMin; Store.salvar(); };
   s.$$('input,select').forEach(e => e.onchange = grava);
-  s.$$('#estilos button').forEach(b => b.onclick = () => {
-    DB.cfg.estilo = b.dataset.e; Store.salvar(); aplicarTema();
-    s.$$('#estilos button').forEach(x => x.classList.toggle('on', x === b));
-  });
+  s.$('#tm').onclick = () => { s.fechar(); temaTela(ajustes); };
   s.$$('#abas input').forEach(c => c.onchange = () => {
     const id = c.name.slice(3);
     DB.cfg.abas = DB.cfg.abas || {};
@@ -176,6 +225,8 @@ function ajustes() {
     if (!abaOn(modAtual)) go(abasAtivas()[0]); else go(modAtual);
   });
   s.$('[name=nome]').oninput = () => { DB.cfg.nome = s.$('[name=nome]').value.trim(); Store.salvar(); };
+  const bi = s.$('#inst');
+  if (bi) bi.onclick = async () => { const ev = window.pwaPrompt; window.pwaPrompt = null; s.fechar(); if (ev) { ev.prompt(); try { await ev.userChoice; } catch (e) {} } };
   s.$('#bk').onclick = salvarBackup;
   s.$('#rs').onclick = async () => { s.fechar(); await restaurar(); };
   Nuvem.ligar(s);
@@ -187,6 +238,42 @@ function ajustes() {
     DB.cfg.salt = uid('s'); DB.cfg.pin = await hashPin(p, DB.cfg.salt); Store.salvar(); s.fechar(); toast('PIN definido.');
   };
   const r0 = s.$('#pin0'); if (r0) r0.onclick = async () => { if (await confirmar('Remover o bloqueio por PIN?', 'Remover')) { DB.cfg.pin = null; DB.cfg.salt = null; Store.salvar(); s.fechar(); toast('PIN removido.'); } };
+}
+
+
+/* ---------- tela de tema e personalização ---------- */
+function temaTela(voltar) {
+  const s = sheet('Tema e personalização', `
+    <div class="prev" aria-hidden="true">
+      <div class="card"><b>Prévia do tema</b><div class="bar"><i style="width:64%"></i></div><small class="mu">3 de 5 tarefas feitas hoje</small>
+        <div class="seg" style="margin:12px 0 4px"><button type="button" class="on">Hoje</button><button type="button">Semana</button><button type="button">Mês</button></div>
+        <div class="acts" style="justify-content:flex-start;margin-top:10px"><button type="button" class="btn">Salvar</button><button type="button" class="btn sec">Cancelar</button></div></div>
+    </div>
+    <div class="dia">Temas prontos</div>
+    <div class="paletas" id="presets">${PRESETS.map(([id, n, d, c]) => `<button type="button" data-t="${id}" class="${presetOn(c) ? 'on' : ''}"><span class="pv" data-p="${c.paleta}"><i></i></span><span><b>${n}</b><small>${d}</small></span></button>`).join('')}</div>
+    <div class="dia">Modo</div>
+    <div class="tg t3" id="modo">${[['escuro', 'Escuro'], ['claro', 'Claro'], ['auto', 'Automático']].map(([id, n]) => `<button type="button" data-m="${id}" class="${DB.cfg.tema === id ? 'on' : ''}">${n}</button>`).join('')}</div>
+    <label class="sw"><span>Preto puro<br><small class="mu">Fundo totalmente preto no modo escuro; economiza bateria em telas AMOLED.</small></span><input type="checkbox" data-k="amoled"${DB.cfg.amoled ? ' checked' : ''}></label>
+    <label class="sw"><span>Destaque único<br><small class="mu">Abas, botões e menu usam a cor da paleta em todos os módulos.</small></span><input type="checkbox" data-k="mono"${DB.cfg.mono ? ' checked' : ''}></label>
+    <div class="dia">Paleta de cores</div>
+    <div class="paletas" id="paletas">${PALETAS.map(([id, n, d]) => `<button type="button" data-p="${id}" class="${paletaAtual() === id ? 'on' : ''}"><span class="pv" data-p="${id}"><i></i></span><span><b>${n}</b><small>${d}</small></span></button>`).join('')}</div>
+    <div class="dia">Estilo visual</div>
+    <div class="estilos" id="estilos">${ESTILOS.map(([id, n, d]) => `<button type="button" data-e="${id}" class="${estiloAtual() === id ? 'on' : ''}"><span class="sv sv-${id}"><i></i><i></i></span><span><b>${n}</b><small>${d}</small></span></button>`).join('')}</div>
+    <div class="dia">Abertura</div>
+    ${F('Vídeo de abertura', sel('intro', [['m', 'Ligado'], ['0', 'Desligado']], introModo() === '0' ? '0' : 'm'))}`, { full: true, onClose: voltar });
+  const marca = (q, attr, val) => s.$$(q).forEach(x => x.classList.toggle('on', x.dataset[attr] === val));
+  const sync = () => {
+    marca('#modo button', 'm', DB.cfg.tema); marca('#paletas button', 'p', paletaAtual()); marca('#estilos button', 'e', estiloAtual());
+    s.$$('#presets button').forEach(x => x.classList.toggle('on', presetOn(PRESETS.find(q => q[0] === x.dataset.t)[3])));
+    s.$$('input[data-k]').forEach(c => { c.checked = !!DB.cfg[c.dataset.k]; });
+  };
+  const muda = (k, v) => { DB.cfg[k] = v; Store.salvar(); aplicarTema(); sync(); };
+  s.$$('#modo button').forEach(b => b.onclick = () => muda('tema', b.dataset.m));
+  s.$$('#paletas button').forEach(b => b.onclick = () => muda('paleta', b.dataset.p));
+  s.$$('#estilos button').forEach(b => b.onclick = () => muda('estilo', b.dataset.e));
+  s.$$('input[data-k]').forEach(c => c.onchange = () => muda(c.dataset.k, c.checked));
+  s.$$('#presets button').forEach(b => b.onclick = () => { const c = PRESETS.find(q => q[0] === b.dataset.t)[3]; Object.assign(DB.cfg, { tema: c.tema, paleta: c.paleta, estilo: c.estilo, mono: !!c.mono, amoled: false }); Store.salvar(); aplicarTema(); sync(); toast(b.dataset.t === 'padrao' ? 'Tema padrão restaurado.' : 'Tema aplicado.'); });
+  s.$('[name=intro]').onchange = e => { try { localStorage.setItem('nortrium.intro', e.target.value); } catch (x) {} };
 }
 
 /* ---------- barra de baixo (só as abas ligadas) ---------- */
@@ -205,8 +292,9 @@ async function boot() {
   go(abasAtivas()[0] || 'hoje');
   if (!ok) toast('Não foi possível ler os dados salvos. Nada será sobrescrito.');
   bloquear();
-  setTimeout(autoBackup, 4000);
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}   // pede para o navegador não apagar os dados
+  setTimeout(lembrarBackup, 4000);
   setTimeout(Nuvem.auto, 8000);
-  document.addEventListener('resume', () => setTimeout(Nuvem.auto, 4000));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(Nuvem.auto, 4000); });
 }
-if (window.cordova) document.addEventListener('deviceready', boot, false); else boot();
+boot();
